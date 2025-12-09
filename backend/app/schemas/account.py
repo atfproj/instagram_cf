@@ -9,8 +9,7 @@ class AccountBase(BaseModel):
     username: str = Field(..., min_length=1, max_length=100)
     language: str = Field(default="en", max_length=10)
     group_id: Optional[UUID] = None
-    proxy_url: Optional[str] = None
-    proxy_type: Optional[str] = None
+    proxy_id: Optional[UUID] = None
 
 
 class AccountCreate(AccountBase):
@@ -22,8 +21,7 @@ class AccountUpdate(BaseModel):
     password: Optional[str] = None
     language: Optional[str] = Field(None, max_length=10)
     group_id: Optional[UUID] = None
-    proxy_url: Optional[str] = None
-    proxy_type: Optional[str] = None
+    proxy_id: Optional[UUID] = None
     status: Optional[AccountStatus] = None
 
 
@@ -40,5 +38,5 @@ class AccountResponse(AccountBase):
     updated_at: datetime
 
     class Config:
-        from_attributes = True
+        orm_mode = True
 

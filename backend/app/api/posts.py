@@ -1,9 +1,11 @@
-from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File
+from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Form
 from sqlalchemy.orm import Session
 from typing import List, Optional
-from uuid import UUID
+from uuid import UUID, uuid4
 from datetime import datetime
 import os
+import logging
+import uuid
 from app.core.database import get_db
 from app.core.config import settings
 from app.models.post import Post, PostExecution, MediaType, PostStatus, PostExecutionStatus
@@ -12,6 +14,8 @@ from app.schemas.post import PostCreate, PostUpdate, PostResponse, PostExecution
 from app.services.instagram import InstagramService
 from app.utils.logging import log_activity
 from app.models.activity_log import LogStatus
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/posts", tags=["posts"])
 
@@ -22,10 +26,10 @@ UPLOAD_DIR = "backend/static/uploads"
 @router.post("/", response_model=PostResponse, status_code=status.HTTP_201_CREATED)
 async def create_post(
     files: List[UploadFile] = File(...),
-    caption: str = None,
-    original_language: str = "ru",
-    target_groups: str = None,  # JSON строка с массивом UUID
-    media_type: MediaType = MediaType.PHOTO,
+    caption: str = Form(None),
+    original_language: str = Form("ru"),
+    target_groups: str = Form(None),  # JSON строка с массивом UUID
+    media_type: MediaType = Form(MediaType.PHOTO),
     db: Session = Depends(get_db)
 ):
     """
@@ -39,6 +43,8 @@ async def create_post(
         media_type: Тип медиа (photo, video, carousel)
     """
     import json
+    
+    logger.info(f"Создание поста: files={len(files) if files else 0}, caption={bool(caption)}, media_type={media_type}")
     
     if not files:
         raise HTTPException(
@@ -61,6 +67,7 @@ async def create_post(
         else:
             group_ids = []
     except Exception as e:
+        logger.error(f"Ошибка парсинга target_groups: {e}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Неверный формат target_groups: {str(e)}"
@@ -73,7 +80,7 @@ async def create_post(
     for file in files:
         # Генерируем уникальное имя файла
         file_ext = os.path.splitext(file.filename)[1]
-        file_name = f"{UUID().hex}{file_ext}"
+        file_name = f"{uuid.uuid4().hex}{file_ext}"
         file_path = os.path.join(UPLOAD_DIR, file_name)
         
         # Сохраняем файл
@@ -203,20 +210,8 @@ def get_post_executions(post_id: UUID, db: Session = Depends(get_db)):
     
     executions = db.query(PostExecution).filter(PostExecution.post_id == post_id).all()
     
-    # Подсчитываем статистику
-    stats = {
-        "total": len(executions),
-        "queued": len([e for e in executions if e.status == PostExecutionStatus.QUEUED]),
-        "posting": len([e for e in executions if e.status == PostExecutionStatus.POSTING]),
-        "success": len([e for e in executions if e.status == PostExecutionStatus.SUCCESS]),
-        "failed": len([e for e in executions if e.status == PostExecutionStatus.FAILED])
-    }
-    
-    return {
-        "executions": executions,
-        "statistics": stats,
-        "post_status": post.status.value
-    }
+    # Возвращаем список executions (как указано в response_model)
+    return [PostExecutionResponse.from_orm(e) for e in executions]
 
 
 @router.post("/{post_id}/translate")

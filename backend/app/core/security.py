@@ -41,18 +41,27 @@ def decode_access_token(token: str) -> Optional[dict]:
 
 
 def get_encryption_key() -> bytes:
-    """Получение ключа шифрования для Fernet (32 байта в base64)"""
+    """Получение ключа шифрования для Fernet (base64-encoded строка)"""
     key = settings.ENCRYPTION_KEY
+    
     # Если ключ уже в base64 формате (44 символа для 32 байт)
     if len(key) == 44:
         try:
-            return base64.urlsafe_b64decode(key)
+            # Проверяем, что это валидный base64
+            decoded = base64.urlsafe_b64decode(key)
+            if len(decoded) == 32:
+                # Возвращаем base64-encoded строку как bytes
+                return key.encode()
         except Exception:
             pass
     
-    # Иначе создаём ключ из строки
-    key_bytes = key.encode()[:32].ljust(32, b'0')
-    return base64.urlsafe_b64encode(key_bytes)
+    # Если ключ не в правильном формате, создаём правильный ключ из строки
+    # Используем хеш SHA256 для получения 32 байт
+    import hashlib
+    key_hash = hashlib.sha256(key.encode()).digest()
+    # Fernet требует base64-encoded ключ (44 символа)
+    encoded_key = base64.urlsafe_b64encode(key_hash).decode()
+    return encoded_key.encode()
 
 
 def encrypt_data(data: str) -> str:

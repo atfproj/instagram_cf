@@ -35,7 +35,7 @@ class PostExecutionResponse(BaseModel):
     created_at: datetime
 
     class Config:
-        from_attributes = True
+        orm_mode = True
 
 
 class PostResponse(PostBase):
@@ -49,5 +49,5 @@ class PostResponse(PostBase):
     executions: Optional[List[PostExecutionResponse]] = None
 
     class Config:
-        from_attributes = True
+        orm_mode = True
 

@@ -52,6 +52,24 @@ def list_proxies(
     return proxies
 
 
+@router.get("/available", response_model=List[ProxyResponse])
+def get_available_proxies(db: Session = Depends(get_db)):
+    """Получить список неиспользуемых прокси (не назначенных ни одному аккаунту)"""
+    from app.models.account import Account
+    
+    # Получаем все активные прокси
+    all_proxies = db.query(Proxy).filter(Proxy.status == ProxyStatus.ACTIVE).all()
+    
+    # Получаем все аккаунты с назначенными прокси
+    accounts_with_proxy = db.query(Account).filter(Account.proxy_id.isnot(None)).all()
+    used_proxy_ids = {acc.proxy_id for acc in accounts_with_proxy if acc.proxy_id}
+    
+    # Фильтруем неиспользуемые прокси
+    available_proxies = [p for p in all_proxies if p.id not in used_proxy_ids]
+    
+    return available_proxies
+
+
 @router.get("/{proxy_id}", response_model=ProxyResponse)
 def get_proxy(proxy_id: UUID, db: Session = Depends(get_db)):
     """Получить информацию о прокси"""
@@ -110,7 +128,7 @@ def delete_proxy(proxy_id: UUID, db: Session = Depends(get_db)):
     
     # Проверяем, не используется ли прокси
     accounts_using_proxy = db.query(Account).filter(
-        Account.proxy_url == db_proxy.url
+        Account.proxy_id == proxy_id
     ).count()
     
     if accounts_using_proxy > 0:
@@ -151,6 +169,24 @@ def check_proxy(proxy_id: UUID, db: Session = Depends(get_db)):
     )
 
 
+@router.get("/available", response_model=List[ProxyResponse])
+def get_available_proxies(db: Session = Depends(get_db)):
+    """Получить список неиспользуемых прокси (не назначенных ни одному аккаунту)"""
+    from app.models.account import Account
+    
+    # Получаем все прокси
+    all_proxies = db.query(Proxy).filter(Proxy.status == ProxyStatus.ACTIVE).all()
+    
+    # Получаем все аккаунты с назначенными прокси
+    accounts_with_proxy = db.query(Account).filter(Account.proxy_id.isnot(None)).all()
+    used_proxy_ids = {acc.proxy_id for acc in accounts_with_proxy if acc.proxy_id}
+    
+    # Фильтруем неиспользуемые прокси
+    available_proxies = [p for p in all_proxies if p.id not in used_proxy_ids]
+    
+    return available_proxies
+
+
 @router.get("/{proxy_id}/accounts")
 def get_proxy_accounts(proxy_id: UUID, db: Session = Depends(get_db)):
     """Получить список аккаунтов, использующих этот прокси"""
@@ -164,7 +200,7 @@ def get_proxy_accounts(proxy_id: UUID, db: Session = Depends(get_db)):
         )
     
     from app.models.account import Account
-    accounts = db.query(Account).filter(Account.proxy_url == proxy.url).all()
+    accounts = db.query(Account).filter(Account.proxy_id == proxy_id).all()
     
-    return [AccountResponse.model_validate(acc) for acc in accounts]
+    return [AccountResponse.from_orm(acc) for acc in accounts]
 

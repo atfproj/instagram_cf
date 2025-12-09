@@ -15,6 +15,7 @@ router = APIRouter(prefix="/api/accounts", tags=["accounts"])
 def create_account(account: AccountCreate, db: Session = Depends(get_db)):
     """Добавить новый аккаунт"""
     from app.services.proxy_manager import ProxyManager
+    from app.models.proxy import Proxy
     
     # Проверка на уникальность username
     existing = db.query(Account).filter(Account.username == account.username).first()
@@ -33,6 +34,23 @@ def create_account(account: AccountCreate, db: Session = Depends(get_db)):
                 detail="Группа не найдена"
             )
     
+    # Проверка существования прокси, если указан
+    proxy = None
+    if account.proxy_id:
+        proxy = db.query(Proxy).filter(Proxy.id == account.proxy_id).first()
+        if not proxy:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Прокси не найден"
+            )
+        # Проверяем, не используется ли прокси другим аккаунтом
+        existing_account = db.query(Account).filter(Account.proxy_id == account.proxy_id).first()
+        if existing_account:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Этот прокси уже используется другим аккаунтом"
+            )
+    
     # Шифруем пароль
     encrypted_password = encrypt_data(account.password)
     
@@ -41,8 +59,9 @@ def create_account(account: AccountCreate, db: Session = Depends(get_db)):
         password=encrypted_password,
         language=account.language,
         group_id=account.group_id,
-        proxy_url=account.proxy_url,
-        proxy_type=account.proxy_type,
+        proxy_id=account.proxy_id,
+        proxy_url=proxy.url if proxy else None,  # Сохраняем для обратной совместимости
+        proxy_type=proxy.type.value if proxy else None,  # Сохраняем для обратной совместимости
         status=AccountStatus.LOGIN_REQUIRED
     )
     db.add(db_account)
@@ -50,7 +69,7 @@ def create_account(account: AccountCreate, db: Session = Depends(get_db)):
     db.refresh(db_account)
     
     # Автоматически назначаем прокси, если не указан
-    if not account.proxy_url:
+    if not account.proxy_id:
         ProxyManager.assign_proxy_to_account(db, db_account)
     
     # Обновляем счётчик аккаунтов в группе
@@ -132,6 +151,39 @@ def update_account(account_id: UUID, account_update: AccountUpdate, db: Session 
                 detail="Группа не найдена"
             )
     
+    # Обработка отвязки прокси (если proxy_id = None)
+    old_proxy_id = db_account.proxy_id
+    if "proxy_id" in update_data:
+        if update_data["proxy_id"] is None:
+            # Отвязываем прокси
+            db_account.proxy_id = None
+            db_account.proxy_url = None
+            db_account.proxy_type = None
+            # Удаляем proxy_id из update_data, чтобы не перезаписать None
+            del update_data["proxy_id"]
+        elif update_data["proxy_id"]:
+            # Проверяем существование нового прокси
+            from app.models.proxy import Proxy
+            proxy = db.query(Proxy).filter(Proxy.id == update_data["proxy_id"]).first()
+            if not proxy:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="Прокси не найден"
+                )
+            # Проверяем, не используется ли прокси другим аккаунтом
+            existing_account = db.query(Account).filter(
+                Account.proxy_id == update_data["proxy_id"],
+                Account.id != account_id
+            ).first()
+            if existing_account:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Этот прокси уже используется другим аккаунтом"
+                )
+            # Обновляем proxy_url и proxy_type из прокси
+            update_data["proxy_url"] = proxy.url
+            update_data["proxy_type"] = proxy.type.value
+    
     old_group_id = db_account.group_id
     
     for field, value in update_data.items():
@@ -185,14 +237,24 @@ def login_account(account_id: UUID, db: Session = Depends(get_db)):
     from app.services.instagram import InstagramService
     from app.utils.logging import log_activity, update_account_status
     from app.models.activity_log import LogStatus
+    from app.models.proxy import Proxy
     from datetime import datetime
+    from sqlalchemy.orm import joinedload
     
-    db_account = db.query(Account).filter(Account.id == account_id).first()
+    # Загружаем аккаунт с прокси
+    db_account = db.query(Account).options(joinedload(Account.proxy)).filter(Account.id == account_id).first()
     if not db_account:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Аккаунт не найден"
         )
+    
+    # Если есть proxy_id, но proxy_url не установлен, обновляем из прокси
+    if db_account.proxy_id and not db_account.proxy_url and db_account.proxy:
+        db_account.proxy_url = db_account.proxy.url
+        db_account.proxy_type = db_account.proxy.type.value
+        db.commit()
+        db.refresh(db_account)
     
     # Создаём сервис Instagram
     instagram_service = InstagramService(db_account)
@@ -224,7 +286,7 @@ def login_account(account_id: UUID, db: Session = Depends(get_db)):
         return {
             "success": True,
             "message": result["message"],
-            "account": AccountResponse.model_validate(db_account)
+            "account": AccountResponse.from_orm(db_account)
         }
     else:
         # Обновляем статус аккаунта
@@ -252,6 +314,27 @@ def login_account(account_id: UUID, db: Session = Depends(get_db)):
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=result["message"]
         )
+
+
+@router.delete("/{account_id}/proxy", response_model=AccountResponse)
+def remove_proxy_from_account(account_id: UUID, db: Session = Depends(get_db)):
+    """Отвязать прокси от аккаунта"""
+    db_account = db.query(Account).filter(Account.id == account_id).first()
+    if not db_account:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Аккаунт не найден"
+        )
+    
+    # Отвязываем прокси
+    db_account.proxy_id = None
+    db_account.proxy_url = None
+    db_account.proxy_type = None
+    
+    db.commit()
+    db.refresh(db_account)
+    
+    return db_account
 
 
 @router.get("/{account_id}/status")
@@ -305,7 +388,7 @@ def get_account_status(account_id: UUID, db: Session = Depends(get_db)):
         )
     
     return {
-        "account": AccountResponse.model_validate(account),
+        "account": AccountResponse.from_orm(account),
         "instagram_status": result
     }
 

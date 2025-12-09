@@ -24,8 +24,9 @@ class Account(Base):
     session_data = Column(JSON, nullable=True)
     group_id = Column(UUID(as_uuid=True), ForeignKey("groups.id"), nullable=True)
     language = Column(String(10), nullable=False, default="en")
-    proxy_url = Column(String(500), nullable=True)
-    proxy_type = Column(String(20), nullable=True)
+    proxy_id = Column(UUID(as_uuid=True), ForeignKey("proxies.id"), nullable=True)
+    proxy_url = Column(String(500), nullable=True)  # Deprecated, используем proxy_id
+    proxy_type = Column(String(20), nullable=True)  # Deprecated, используем proxy_id
     status = Column(Enum(AccountStatus), default=AccountStatus.LOGIN_REQUIRED, nullable=False)
     last_post_at = Column(DateTime, nullable=True)
     last_login_at = Column(DateTime, nullable=True)
@@ -40,6 +41,7 @@ class Account(Base):
 
     # Relationships
     group = relationship("Group", back_populates="accounts")
+    proxy = relationship("Proxy", foreign_keys=[proxy_id])
     post_executions = relationship("PostExecution", back_populates="account", cascade="all, delete-orphan")
     activity_logs = relationship("ActivityLog", back_populates="account", cascade="all, delete-orphan")
 

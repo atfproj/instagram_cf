@@ -31,22 +31,42 @@ class InstagramService:
     def _setup_client(self):
         """Настройка клиента Instagram с прокси и сессией"""
         # Настройка прокси, если указан
-        if self.account.proxy_url:
+        proxy_url = None
+        
+        # Сначала пытаемся получить прокси через proxy_id (новый способ)
+        if self.account.proxy_id and self.account.proxy:
+            proxy_url = self.account.proxy.url
+        # Если нет proxy_id, используем старый способ через proxy_url
+        elif self.account.proxy_url:
+            proxy_url = self.account.proxy_url
+        
+        if proxy_url:
             try:
-                # instagrapi принимает прокси как строку
-                self.client.set_proxy(self.account.proxy_url)
+                # instagrapi принимает прокси как строку в формате http://user:pass@host:port
+                # Убеждаемся, что формат правильный
+                if not proxy_url.startswith(('http://', 'https://', 'socks5://')):
+                    # Если нет протокола, добавляем http://
+                    proxy_url = f"http://{proxy_url}"
+                
+                self.client.set_proxy(proxy_url)
+                logger.info(f"Прокси установлен для {self.account.username}: {proxy_url[:50]}...")
             except Exception as e:
-                logger.warning(f"Не удалось установить прокси для {self.account.username}: {e}")
+                logger.error(f"Не удалось установить прокси для {self.account.username}: {e}", exc_info=True)
+                # Не прерываем выполнение, но логируем ошибку
         
         # Загрузка сессии, если есть
         if self.account.session_data:
             try:
                 self.client.set_settings(self.account.session_data)
+                logger.info(f"Сессия загружена для {self.account.username} (не требуется повторный логин)")
                 # Восстанавливаем device_id из сессии, если есть
                 if self.account.device_id:
                     self.client.set_device(self.account.device_id)
+                    logger.debug(f"Device ID восстановлен для {self.account.username}")
             except Exception as e:
-                logger.warning(f"Не удалось загрузить сессию для {self.account.username}: {e}")
+                logger.warning(f"Не удалось загрузить сессию для {self.account.username}: {e}. Потребуется повторный логин.")
+        else:
+            logger.info(f"Сессия отсутствует для {self.account.username}. Потребуется авторизация.")
     
     def login(self, password: Optional[str] = None) -> Dict[str, Any]:
         """
@@ -67,15 +87,42 @@ class InstagramService:
             if not password:
                 password = decrypt_data(self.account.password)
             
+            # Логируем информацию о прокси
+            proxy_info = "без прокси"
+            if self.account.proxy_id and self.account.proxy:
+                proxy_info = f"прокси: {self.account.proxy.url[:50]}..."
+            elif self.account.proxy_url:
+                proxy_info = f"прокси: {self.account.proxy_url[:50]}..."
+            
+            logger.info(f"Попытка авторизации {self.account.username} ({proxy_info})")
+            
+            # Проверяем, что прокси действительно установлен
+            try:
+                current_proxy = getattr(self.client, '_proxy', None) or getattr(self.client, 'proxy', None)
+                if current_proxy:
+                    logger.info(f"Прокси в клиенте: {current_proxy}")
+                else:
+                    logger.warning(f"Прокси не найден в клиенте, хотя должен быть установлен")
+            except Exception as e:
+                logger.warning(f"Не удалось проверить прокси в клиенте: {e}")
+            
+            # Небольшая задержка перед авторизацией (помогает избежать проблем с Instagram)
+            import time
+            time.sleep(2)
+            
             # Попытка авторизации
             self.client.login(self.account.username, password)
             
             # Сохраняем сессию
             session_data = self.client.get_settings()
             
-            # Сохраняем device_id и user_agent
-            device_id = self.client.device_id
-            user_agent = self.client.user_agent
+            # Сохраняем device_id и user_agent из settings
+            device_id = session_data.get("device_id") or session_data.get("device_settings", {}).get("device_id")
+            user_agent = session_data.get("user_agent")
+            
+            # Если device_id не найден, это нормально - он может быть None
+            if not device_id:
+                logger.info(f"device_id не найден в session_data для {self.account.username}, это нормально")
             
             duration_ms = int((datetime.utcnow() - start_time).total_seconds() * 1000)
             
@@ -127,10 +174,50 @@ class InstagramService:
             }
             
         except Exception as e:
-            logger.error(f"Ошибка при авторизации {self.account.username}: {e}", exc_info=True)
+            error_str = str(e).lower()
+            error_type = type(e).__name__
+            
+            # Логируем детали ошибки с полным traceback
+            import traceback
+            logger.error(f"Ошибка при авторизации {self.account.username}: {error_type}: {str(e)}")
+            logger.error(f"Traceback: {traceback.format_exc()}")
+            
+            # Проверяем, используется ли прокси
+            try:
+                proxy_used = getattr(self.client, '_proxy', None) or getattr(self.client, 'proxy', None)
+                if proxy_used:
+                    logger.info(f"Прокси был установлен: {proxy_used}")
+                else:
+                    logger.warning(f"Прокси не найден в клиенте для {self.account.username}")
+            except:
+                pass
+            
+            # Проверяем, не связана ли ошибка с прокси
+            if "proxy" in error_str or "tunnel" in error_str or "403" in error_str or "connection" in error_str:
+                return {
+                    "success": False,
+                    "message": f"Ошибка прокси: {str(e)}. Проверьте настройки прокси или попробуйте другой прокси.",
+                    "proxy_error": True
+                }
+            
+            # Проверяем специфичные ошибки Instagram
+            if "sorry, there was a problem" in error_str:
+                return {
+                    "success": False,
+                    "message": f"Instagram сообщает о проблеме с запросом. Возможные причины: аккаунт требует подтверждения, заблокирован, или проблема с прокси. Ошибка: {str(e)}",
+                    "instagram_error": True
+                }
+            
+            if "can't find an account" in error_str:
+                return {
+                    "success": False,
+                    "message": f"Аккаунт не найден: {str(e)}. Проверьте правильность username/email.",
+                    "account_not_found": True
+                }
+            
             return {
                 "success": False,
-                "message": f"Неизвестная ошибка: {str(e)}"
+                "message": f"Ошибка авторизации ({error_type}): {str(e)}"
             }
     
     def check_status(self) -> Dict[str, Any]:
@@ -186,6 +273,55 @@ class InstagramService:
         start_time = datetime.utcnow()
         
         try:
+            # Конвертируем и изменяем размер изображения, если нужно
+            from PIL import Image
+            import os
+            
+            # Открываем изображение
+            img = Image.open(photo_path)
+            
+            # Конвертируем в RGB (на случай если PNG с прозрачностью)
+            if img.mode != 'RGB':
+                img = img.convert('RGB')
+            
+            # Проверяем и исправляем соотношение сторон
+            width, height = img.size
+            aspect_ratio = width / height
+            
+            # Instagram принимает:
+            # - Квадрат: 1:1 (0.8 - 1.91)
+            # - Вертикальное: 4:5 (0.8 - 1.0)
+            # - Горизонтальное: 1.91:1 (1.91 - 1.0)
+            # Минимальное соотношение: 0.8, максимальное: 1.91
+            
+            if aspect_ratio < 0.8:
+                # Слишком узкое (высокое) - обрезаем до 4:5
+                new_width = int(height * 0.8)
+                left = (width - new_width) // 2
+                img = img.crop((left, 0, left + new_width, height))
+                logger.info(f"Изображение обрезано до соотношения 4:5 (было {aspect_ratio:.2f})")
+            elif aspect_ratio > 1.91:
+                # Слишком широкое - обрезаем до 1.91:1
+                new_height = int(width / 1.91)
+                top = (height - new_height) // 2
+                img = img.crop((0, top, width, top + new_height))
+                logger.info(f"Изображение обрезано до соотношения 1.91:1 (было {aspect_ratio:.2f})")
+            
+            # Проверяем формат файла и конвертируем в JPG, если нужно
+            file_ext = os.path.splitext(photo_path)[1].lower()
+            if file_ext not in ['.jpg', '.jpeg']:
+                logger.info(f"Конвертация изображения {photo_path} в JPG")
+                # Создаём временный файл JPG
+                jpg_path = os.path.splitext(photo_path)[0] + '.jpg'
+                img.save(jpg_path, 'JPEG', quality=95)
+                photo_path = jpg_path
+                logger.info(f"Изображение сохранено как {photo_path}")
+            else:
+                # Сохраняем обратно, если изменили размер
+                if aspect_ratio < 0.8 or aspect_ratio > 1.91:
+                    img.save(photo_path, 'JPEG', quality=95)
+                    logger.info(f"Изображение сохранено с исправленным соотношением сторон")
+            
             # Публикуем фото
             media = self.client.photo_upload(photo_path, caption)
             

@@ -5,15 +5,15 @@ from alembic import context
 import os
 import sys
 
-# Добавляем корневую директорию проекта в путь
-# alembic находится в backend/alembic, поэтому нужно подняться на 2 уровня вверх
-project_root = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
-if project_root not in sys.path:
-    sys.path.insert(0, project_root)
+# Добавляем директорию backend в путь
+# alembic находится в backend/alembic, поэтому нужно подняться на 1 уровень вверх
+backend_dir = os.path.dirname(os.path.dirname(__file__))
+if backend_dir not in sys.path:
+    sys.path.insert(0, backend_dir)
 
-from backend.app.core.database import Base
-from backend.app.core.config import settings
-from backend.app.models import *  # Импортируем все модели
+from app.core.database import Base
+from app.core.config import settings
+from app.models import *  # Импортируем все модели
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.

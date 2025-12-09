@@ -63,11 +63,15 @@ def task_post_to_instagram(
     """
     db = self.db
     
+    logger.info(f"Начало выполнения задачи публикации: post_id={post_id}, account_id={account_id}, execution_id={execution_id}")
+    
     try:
         # Получаем данные из БД
         post = db.query(Post).filter(Post.id == UUID(post_id)).first()
         account = db.query(Account).filter(Account.id == UUID(account_id)).first()
         execution = db.query(PostExecution).filter(PostExecution.id == UUID(execution_id)).first()
+        
+        logger.info(f"Данные получены: post={post is not None}, account={account.username if account else None}, execution={execution is not None}")
         
         if not all([post, account, execution]):
             logger.error(f"Не найдены необходимые данные: post={post_id}, account={account_id}, execution={execution_id}")
@@ -87,12 +91,13 @@ def task_post_to_instagram(
             db.commit()
             return {"success": False, "error": execution.error_message}
         
-        # Проверяем минимальную задержку между постами (30 минут)
+        # Проверяем минимальную задержку между постами (используем настройки из конфига)
+        min_delay_minutes = settings.MIN_DELAY_BETWEEN_POSTS_SEC / 60  # Конвертируем секунды в минуты
         if account.last_post_at:
             time_since_last_post = datetime.utcnow() - account.last_post_at
-            if time_since_last_post < timedelta(minutes=30):
-                wait_seconds = (timedelta(minutes=30) - time_since_last_post).total_seconds()
-                logger.info(f"Ожидание {wait_seconds:.0f} секунд перед публикацией для {account.username}")
+            if time_since_last_post < timedelta(minutes=min_delay_minutes):
+                wait_seconds = (timedelta(minutes=min_delay_minutes) - time_since_last_post).total_seconds()
+                logger.info(f"Ожидание {wait_seconds:.0f} секунд перед публикацией для {account.username} (прошло {time_since_last_post.total_seconds():.0f} сек с последнего поста)")
                 raise self.retry(countdown=int(wait_seconds))
         
         # Обновляем статус выполнения

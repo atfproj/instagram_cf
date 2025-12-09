@@ -1,6 +1,7 @@
 import { useState } from 'react'
-import { useMutation } from 'react-query'
+import { useMutation, useQuery } from 'react-query'
 import { accountsApi } from '../api/accounts'
+import { proxiesApi } from '../api/proxies'
 
 export default function AccountForm({ account, groups, onSuccess }) {
   const [formData, setFormData] = useState({
@@ -8,9 +9,22 @@ export default function AccountForm({ account, groups, onSuccess }) {
     password: '',
     language: account?.language || 'ru',
     group_id: account?.group_id || '',
-    proxy_url: account?.proxy_url || '',
-    proxy_type: account?.proxy_type || 'http',
+    proxy_id: account?.proxy_id || '',
   })
+
+  // Загружаем доступные прокси при создании нового аккаунта
+  const { data: availableProxies } = useQuery(
+    'availableProxies',
+    () => proxiesApi.getAvailable().then(r => r.data),
+    { enabled: !account }
+  )
+
+  // Загружаем все прокси при редактировании (чтобы можно было выбрать любой или отвязать)
+  const { data: allProxies } = useQuery(
+    'allProxies',
+    () => proxiesApi.getAll().then(r => r.data),
+    { enabled: !!account }
+  )
 
   const createMutation = useMutation(
     (data) => accountsApi.create(data),
@@ -31,9 +45,14 @@ export default function AccountForm({ account, groups, onSuccess }) {
     if (!data.group_id) {
       delete data.group_id
     }
-    if (!data.proxy_url) {
-      delete data.proxy_url
-      delete data.proxy_type
+    // При редактировании, если proxy_id пустой, отправляем null для отвязки
+    if (!data.proxy_id) {
+      if (account && account.proxy_id) {
+        // Если у аккаунта был прокси, а теперь нет - отвязываем
+        data.proxy_id = null
+      } else {
+        delete data.proxy_id
+      }
     }
 
     if (account) {
@@ -117,32 +136,43 @@ export default function AccountForm({ account, groups, onSuccess }) {
 
       <div>
         <label className="block text-sm font-medium text-gray-700 mb-1">
-          Прокси URL
+          Прокси
         </label>
-        <input
-          type="text"
-          value={formData.proxy_url}
-          onChange={(e) => setFormData({ ...formData, proxy_url: e.target.value })}
+        <select
+          value={formData.proxy_id}
+          onChange={(e) => setFormData({ ...formData, proxy_id: e.target.value })}
           className="input"
-          placeholder="http://user:pass@ip:port"
-        />
+        >
+          <option value="">
+            {account ? 'Отвязать прокси' : 'Без прокси (будет назначен автоматически)'}
+          </option>
+          {account ? (
+            // При редактировании показываем все прокси
+            (allProxies || []).map((proxy) => (
+              <option key={proxy.id} value={proxy.id}>
+                {proxy.url} ({proxy.type}) {proxy.id === account.proxy_id ? '(текущий)' : ''}
+              </option>
+            ))
+          ) : (
+            // При создании показываем только доступные
+            (availableProxies || []).map((proxy) => (
+              <option key={proxy.id} value={proxy.id}>
+                {proxy.url} ({proxy.type})
+              </option>
+            ))
+          )}
+        </select>
+        {!account && availableProxies && availableProxies.length === 0 && (
+          <p className="text-sm text-gray-500 mt-1">
+            Нет доступных прокси. Все прокси уже используются.
+          </p>
+        )}
+        {account && account.proxy_id && (
+          <p className="text-sm text-blue-600 mt-1">
+            Текущий прокси будет отвязан, если выберите "Отвязать прокси"
+          </p>
+        )}
       </div>
-
-      {formData.proxy_url && (
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            Тип прокси
-          </label>
-          <select
-            value={formData.proxy_type}
-            onChange={(e) => setFormData({ ...formData, proxy_type: e.target.value })}
-            className="input"
-          >
-            <option value="http">HTTP</option>
-            <option value="socks5">SOCKS5</option>
-          </select>
-        </div>
-      )}
 
       <div className="flex justify-end gap-3 pt-4">
         <button

@@ -2,6 +2,7 @@ import client from './client'
 
 export const proxiesApi = {
   getAll: (params = {}) => client.get('/api/proxies/', { params }),
+  getAvailable: () => client.get('/api/proxies/available'),
   getById: (id) => client.get(`/api/proxies/${id}`),
   create: (data) => client.post('/api/proxies/', data),
   update: (id, data) => client.put(`/api/proxies/${id}`, data),

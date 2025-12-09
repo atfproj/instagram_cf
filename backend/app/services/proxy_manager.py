@@ -38,25 +38,59 @@ class ProxyManager:
                 "https://": proxy.url
             }
             
-            # Пытаемся подключиться к тестовому URL через прокси
+            # Тест 1: Проверка базовой работоспособности
             with httpx.Client(proxies=proxies, timeout=timeout) as client:
-                response = client.get("https://httpbin.org/ip", follow_redirects=True)
-                
-                if response.status_code == 200:
-                    duration_ms = int((datetime.utcnow() - start_time).total_seconds() * 1000)
-                    
+                try:
+                    response = client.get("https://httpbin.org/ip", follow_redirects=True)
+                    if response.status_code != 200:
+                        return {
+                            "success": False,
+                            "message": f"Прокси вернул статус {response.status_code}",
+                            "error": f"HTTP {response.status_code}"
+                        }
+                except Exception as e:
                     return {
-                        "success": True,
-                        "message": "Прокси работает",
-                        "response_time_ms": duration_ms,
-                        "ip": response.json().get("origin", "unknown")
+                        "success": False,
+                        "message": f"Ошибка подключения к тестовому серверу: {str(e)}",
+                        "error": "ConnectionError"
+                    }
+            
+            # Тест 2: Проверка доступа к Instagram (важно для работы)
+            try:
+                with httpx.Client(proxies=proxies, timeout=timeout) as client:
+                    # Пытаемся подключиться к Instagram
+                    response = client.get("https://i.instagram.com/api/v1/launcher/sync/", follow_redirects=True, timeout=timeout)
+                    # Если получили ответ (даже ошибку), значит прокси пропускает Instagram
+                    instagram_accessible = True
+            except httpx.ProxyError as e:
+                error_str = str(e).lower()
+                if "403" in error_str or "forbidden" in error_str:
+                    return {
+                        "success": False,
+                        "message": "Прокси блокирует доступ к Instagram (403 Forbidden). Прокси не подходит для работы с Instagram.",
+                        "error": "InstagramBlocked",
+                        "instagram_accessible": False
                     }
                 else:
                     return {
                         "success": False,
-                        "message": f"Прокси вернул статус {response.status_code}",
-                        "error": f"HTTP {response.status_code}"
+                        "message": f"Ошибка подключения к Instagram через прокси: {str(e)}",
+                        "error": "InstagramConnectionError"
                     }
+            except Exception as e:
+                # Другие ошибки (таймаут и т.д.) - считаем что прокси работает, но может быть медленным
+                instagram_accessible = False
+                logger.warning(f"Не удалось проверить доступ к Instagram через прокси {proxy.url}: {e}")
+            
+            # Если дошли сюда, прокси работает
+            duration_ms = int((datetime.utcnow() - start_time).total_seconds() * 1000)
+            
+            return {
+                "success": True,
+                "message": "Прокси работает" + (" и доступен Instagram" if instagram_accessible else " (Instagram не проверен)"),
+                "response_time_ms": duration_ms,
+                "instagram_accessible": instagram_accessible
+            }
                     
         except httpx.TimeoutException:
             return {

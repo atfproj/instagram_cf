@@ -103,6 +103,6 @@ def get_group_accounts(group_id: UUID, db: Session = Depends(get_db)):
         )
     
     from app.schemas.account import AccountResponse
-    accounts = [AccountResponse.model_validate(acc) for acc in group.accounts]
+    accounts = [AccountResponse.from_orm(acc) for acc in group.accounts]
     return accounts
 
