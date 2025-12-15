@@ -91,7 +91,7 @@ services:
         - VITE_API_URL=
     container_name: instagram_cf_frontend
     ports:
-      - "3001:80"
+      - "3002:80"
     depends_on:
       - app
     restart: unless-stopped
