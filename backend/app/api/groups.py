@@ -4,13 +4,15 @@ from typing import List
 from uuid import UUID
 from app.core.database import get_db
 from app.models.group import Group
+from app.models.user import User
 from app.schemas.group import GroupCreate, GroupUpdate, GroupResponse
+from app.api.auth import get_current_user
 
 router = APIRouter(prefix="/api/groups", tags=["groups"])
 
 
 @router.post("/", response_model=GroupResponse, status_code=status.HTTP_201_CREATED)
-def create_group(group: GroupCreate, db: Session = Depends(get_db)):
+def create_group(group: GroupCreate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     """Создать новую группу"""
     # Проверка на уникальность имени
     existing = db.query(Group).filter(Group.name == group.name).first()
@@ -28,14 +30,14 @@ def create_group(group: GroupCreate, db: Session = Depends(get_db)):
 
 
 @router.get("/", response_model=List[GroupResponse])
-def list_groups(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
+def list_groups(skip: int = 0, limit: int = 100, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     """Получить список всех групп"""
     groups = db.query(Group).offset(skip).limit(limit).all()
     return groups
 
 
 @router.get("/{group_id}", response_model=GroupResponse)
-def get_group(group_id: UUID, db: Session = Depends(get_db)):
+def get_group(group_id: UUID, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     """Получить информацию о группе"""
     group = db.query(Group).filter(Group.id == group_id).first()
     if not group:
@@ -47,7 +49,7 @@ def get_group(group_id: UUID, db: Session = Depends(get_db)):
 
 
 @router.put("/{group_id}", response_model=GroupResponse)
-def update_group(group_id: UUID, group_update: GroupUpdate, db: Session = Depends(get_db)):
+def update_group(group_id: UUID, group_update: GroupUpdate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     """Обновить группу"""
     db_group = db.query(Group).filter(Group.id == group_id).first()
     if not db_group:
@@ -78,7 +80,7 @@ def update_group(group_id: UUID, group_update: GroupUpdate, db: Session = Depend
 
 
 @router.delete("/{group_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_group(group_id: UUID, db: Session = Depends(get_db)):
+def delete_group(group_id: UUID, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     """Удалить группу"""
     db_group = db.query(Group).filter(Group.id == group_id).first()
     if not db_group:
@@ -93,7 +95,7 @@ def delete_group(group_id: UUID, db: Session = Depends(get_db)):
 
 
 @router.get("/{group_id}/accounts")
-def get_group_accounts(group_id: UUID, db: Session = Depends(get_db)):
+def get_group_accounts(group_id: UUID, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     """Получить список аккаунтов в группе"""
     group = db.query(Group).filter(Group.id == group_id).first()
     if not group:

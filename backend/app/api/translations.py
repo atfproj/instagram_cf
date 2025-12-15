@@ -3,7 +3,9 @@ from sqlalchemy.orm import Session
 from typing import List, Optional
 from pydantic import BaseModel, Field
 from app.core.database import get_db
+from app.models.user import User
 from app.services.translator import translator_service
+from app.api.auth import get_current_user
 
 router = APIRouter(prefix="/api/translations", tags=["translations"])
 
@@ -35,7 +37,8 @@ class BatchTranslationResponse(BaseModel):
 @router.post("/", response_model=TranslationResponse)
 def translate_text(
     request: TranslationRequest,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
 ):
     """
     Перевести текст на указанный язык
@@ -67,7 +70,8 @@ def translate_text(
 @router.post("/batch", response_model=BatchTranslationResponse)
 def translate_batch(
     request: BatchTranslationRequest,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
 ):
     """
     Перевести несколько текстов одновременно
@@ -85,7 +89,7 @@ def translate_batch(
 
 
 @router.get("/languages")
-def get_supported_languages():
+def get_supported_languages(current_user: User = Depends(get_current_user)):
     """
     Получить список поддерживаемых языков
     

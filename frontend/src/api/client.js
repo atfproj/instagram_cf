@@ -1,6 +1,8 @@
 import axios from 'axios'
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8009'
+// Если VITE_API_URL не указан или пустой, используем относительные пути (для nginx proxy)
+// Иначе используем указанный URL
+const API_BASE_URL = import.meta.env.VITE_API_URL || (import.meta.env.PROD ? '' : 'http://localhost:8009')
 
 const client = axios.create({
   baseURL: API_BASE_URL,
@@ -9,11 +11,34 @@ const client = axios.create({
   },
 })
 
+// Interceptor для добавления токена к запросам
+client.interceptors.request.use(
+  (config) => {
+    const token = localStorage.getItem('token')
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`
+    }
+    return config
+  },
+  (error) => {
+    return Promise.reject(error)
+  }
+)
+
 // Interceptor для обработки ошибок
 client.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response) {
+      // 401 - неавторизован, перенаправляем на логин
+      if (error.response.status === 401) {
+        localStorage.removeItem('token')
+        localStorage.removeItem('user')
+        // Перенаправляем на страницу логина только если мы не на ней
+        if (window.location.pathname !== '/login') {
+          window.location.href = '/login'
+        }
+      }
       // Сервер вернул ошибку
       const message = error.response.data?.detail || error.response.data?.message || 'Произошла ошибка'
       return Promise.reject(new Error(message))

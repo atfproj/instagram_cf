@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from backend.app.core.config import settings
 from backend.app.core.database import engine, Base
-from backend.app.api import groups, accounts, posts, proxies, translations
+from backend.app.api import groups, accounts, posts, proxies, translations, auth
 import os
 
 # Создание таблиц (в продакшене используем миграции)
@@ -17,7 +17,23 @@ app = FastAPI(
 )
 
 # Настройка CORS
-cors_origins = os.getenv("CORS_ORIGINS", "*").split(",") if not settings.DEBUG else ["*"]
+# В продакшене используем CORS_ORIGINS из переменных окружения
+# В разработке разрешаем все источники
+if settings.DEBUG:
+    cors_origins = ["*"]
+else:
+    cors_origins_str = os.getenv("CORS_ORIGINS", "*")
+    # Если указан "*" или пусто, разрешаем все
+    if cors_origins_str == "*" or not cors_origins_str:
+        cors_origins = ["*"]
+    else:
+        # Разбиваем по запятой и очищаем от пробелов
+        cors_origins = [origin.strip() for origin in cors_origins_str.split(",") if origin.strip()]
+
+# Логируем настройки CORS для отладки
+import logging
+logger = logging.getLogger(__name__)
+logger.info(f"CORS origins configured: {cors_origins}")
 
 app.add_middleware(
     CORSMiddleware,
@@ -25,9 +41,11 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["*"],
 )
 
 # Подключение роутеров
+app.include_router(auth.router)  # Auth роутер должен быть первым (без защиты)
 app.include_router(groups.router)
 app.include_router(accounts.router)
 app.include_router(posts.router)

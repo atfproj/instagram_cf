@@ -10,6 +10,8 @@ from app.core.database import get_db
 from app.core.config import settings
 from app.models.post import Post, PostExecution, MediaType, PostStatus, PostExecutionStatus
 from app.models.account import Account, AccountStatus
+from app.models.user import User
+from app.api.auth import get_current_user
 from app.schemas.post import PostCreate, PostUpdate, PostResponse, PostExecutionResponse
 from app.services.instagram import InstagramService
 from app.utils.logging import log_activity
@@ -30,7 +32,8 @@ async def create_post(
     original_language: str = Form("ru"),
     target_groups: str = Form(None),  # JSON строка с массивом UUID
     media_type: MediaType = Form(MediaType.PHOTO),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
 ):
     """
     Создать пост (загрузить медиа + текст)
@@ -108,14 +111,14 @@ async def create_post(
 
 
 @router.get("/", response_model=List[PostResponse])
-def list_posts(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
+def list_posts(skip: int = 0, limit: int = 100, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     """Получить список всех постов"""
     posts = db.query(Post).order_by(Post.created_at.desc()).offset(skip).limit(limit).all()
     return posts
 
 
 @router.get("/{post_id}", response_model=PostResponse)
-def get_post(post_id: UUID, db: Session = Depends(get_db)):
+def get_post(post_id: UUID, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     """Получить информацию о посте"""
     post = db.query(Post).filter(Post.id == post_id).first()
     if not post:
@@ -127,7 +130,7 @@ def get_post(post_id: UUID, db: Session = Depends(get_db)):
 
 
 @router.post("/{post_id}/publish")
-def publish_post(post_id: UUID, db: Session = Depends(get_db)):
+def publish_post(post_id: UUID, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     """
     Запустить публикацию поста на все аккаунты в выбранных группах
     
@@ -199,7 +202,7 @@ def publish_post(post_id: UUID, db: Session = Depends(get_db)):
 
 
 @router.get("/{post_id}/executions", response_model=List[PostExecutionResponse])
-def get_post_executions(post_id: UUID, db: Session = Depends(get_db)):
+def get_post_executions(post_id: UUID, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     """Получить статус публикации по аккаунтам"""
     post = db.query(Post).filter(Post.id == post_id).first()
     if not post:
@@ -215,7 +218,7 @@ def get_post_executions(post_id: UUID, db: Session = Depends(get_db)):
 
 
 @router.post("/{post_id}/translate")
-def get_post_translations(post_id: UUID, db: Session = Depends(get_db)):
+def get_post_translations(post_id: UUID, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     """
     Получить переводы текста поста для всех языков аккаунтов в выбранных группах
     
@@ -276,7 +279,8 @@ def get_post_translations(post_id: UUID, db: Session = Depends(get_db)):
 def test_post_to_account(
     post_id: UUID,
     account_id: UUID,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
 ):
     """
     Тестовая публикация поста на один аккаунт

@@ -6,13 +6,15 @@ from app.core.database import get_db
 from app.core.security import encrypt_data, decrypt_data
 from app.models.account import Account, AccountStatus
 from app.models.group import Group
+from app.models.user import User
 from app.schemas.account import AccountCreate, AccountUpdate, AccountResponse
+from app.api.auth import get_current_user
 
 router = APIRouter(prefix="/api/accounts", tags=["accounts"])
 
 
 @router.post("/", response_model=AccountResponse, status_code=status.HTTP_201_CREATED)
-def create_account(account: AccountCreate, db: Session = Depends(get_db)):
+def create_account(account: AccountCreate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     """Добавить новый аккаунт"""
     from app.services.proxy_manager import ProxyManager
     from app.models.proxy import Proxy
@@ -84,6 +86,7 @@ def create_account(account: AccountCreate, db: Session = Depends(get_db)):
 
 @router.get("/", response_model=List[AccountResponse])
 def list_accounts(
+    current_user: User = Depends(get_current_user),
     skip: int = 0,
     limit: int = 100,
     group_id: UUID = None,
@@ -103,7 +106,7 @@ def list_accounts(
 
 
 @router.get("/{account_id}", response_model=AccountResponse)
-def get_account(account_id: UUID, db: Session = Depends(get_db)):
+def get_account(account_id: UUID, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     """Получить информацию об аккаунте"""
     account = db.query(Account).filter(Account.id == account_id).first()
     if not account:
@@ -115,7 +118,7 @@ def get_account(account_id: UUID, db: Session = Depends(get_db)):
 
 
 @router.put("/{account_id}", response_model=AccountResponse)
-def update_account(account_id: UUID, account_update: AccountUpdate, db: Session = Depends(get_db)):
+def update_account(account_id: UUID, account_update: AccountUpdate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     """Обновить аккаунт"""
     db_account = db.query(Account).filter(Account.id == account_id).first()
     if not db_account:
@@ -208,7 +211,7 @@ def update_account(account_id: UUID, account_update: AccountUpdate, db: Session 
 
 
 @router.delete("/{account_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_account(account_id: UUID, db: Session = Depends(get_db)):
+def delete_account(account_id: UUID, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     """Удалить аккаунт"""
     db_account = db.query(Account).filter(Account.id == account_id).first()
     if not db_account:
@@ -232,7 +235,7 @@ def delete_account(account_id: UUID, db: Session = Depends(get_db)):
 
 
 @router.post("/{account_id}/login")
-def login_account(account_id: UUID, db: Session = Depends(get_db)):
+def login_account(account_id: UUID, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     """Авторизоваться в Instagram"""
     from app.services.instagram import InstagramService
     from app.utils.logging import log_activity, update_account_status
@@ -317,7 +320,7 @@ def login_account(account_id: UUID, db: Session = Depends(get_db)):
 
 
 @router.delete("/{account_id}/proxy", response_model=AccountResponse)
-def remove_proxy_from_account(account_id: UUID, db: Session = Depends(get_db)):
+def remove_proxy_from_account(account_id: UUID, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     """Отвязать прокси от аккаунта"""
     db_account = db.query(Account).filter(Account.id == account_id).first()
     if not db_account:
@@ -338,7 +341,7 @@ def remove_proxy_from_account(account_id: UUID, db: Session = Depends(get_db)):
 
 
 @router.get("/{account_id}/status")
-def get_account_status(account_id: UUID, db: Session = Depends(get_db)):
+def get_account_status(account_id: UUID, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     """Проверить статус аккаунта в Instagram"""
     from app.services.instagram import InstagramService
     from app.utils.logging import log_activity, update_account_status

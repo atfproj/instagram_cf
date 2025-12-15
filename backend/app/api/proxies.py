@@ -4,14 +4,16 @@ from typing import List
 from uuid import UUID
 from app.core.database import get_db
 from app.models.proxy import Proxy, ProxyStatus
+from app.models.user import User
 from app.schemas.proxy import ProxyCreate, ProxyUpdate, ProxyResponse, ProxyCheckResponse
 from app.services.proxy_manager import ProxyManager
+from app.api.auth import get_current_user
 
 router = APIRouter(prefix="/api/proxies", tags=["proxies"])
 
 
 @router.post("/", response_model=ProxyResponse, status_code=status.HTTP_201_CREATED)
-def create_proxy(proxy: ProxyCreate, db: Session = Depends(get_db)):
+def create_proxy(proxy: ProxyCreate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     """Добавить новый прокси"""
     # Проверка на уникальность URL
     existing = db.query(Proxy).filter(Proxy.url == proxy.url).first()
@@ -37,6 +39,7 @@ def create_proxy(proxy: ProxyCreate, db: Session = Depends(get_db)):
 
 @router.get("/", response_model=List[ProxyResponse])
 def list_proxies(
+    current_user: User = Depends(get_current_user),
     skip: int = 0,
     limit: int = 100,
     status_filter: ProxyStatus = None,
@@ -53,7 +56,7 @@ def list_proxies(
 
 
 @router.get("/available", response_model=List[ProxyResponse])
-def get_available_proxies(db: Session = Depends(get_db)):
+def get_available_proxies(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     """Получить список неиспользуемых прокси (не назначенных ни одному аккаунту)"""
     from app.models.account import Account
     
@@ -71,7 +74,7 @@ def get_available_proxies(db: Session = Depends(get_db)):
 
 
 @router.get("/{proxy_id}", response_model=ProxyResponse)
-def get_proxy(proxy_id: UUID, db: Session = Depends(get_db)):
+def get_proxy(proxy_id: UUID, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     """Получить информацию о прокси"""
     proxy = db.query(Proxy).filter(Proxy.id == proxy_id).first()
     if not proxy:
@@ -83,7 +86,7 @@ def get_proxy(proxy_id: UUID, db: Session = Depends(get_db)):
 
 
 @router.put("/{proxy_id}", response_model=ProxyResponse)
-def update_proxy(proxy_id: UUID, proxy_update: ProxyUpdate, db: Session = Depends(get_db)):
+def update_proxy(proxy_id: UUID, proxy_update: ProxyUpdate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     """Обновить прокси"""
     db_proxy = db.query(Proxy).filter(Proxy.id == proxy_id).first()
     if not db_proxy:
@@ -115,7 +118,7 @@ def update_proxy(proxy_id: UUID, proxy_update: ProxyUpdate, db: Session = Depend
 
 
 @router.delete("/{proxy_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_proxy(proxy_id: UUID, db: Session = Depends(get_db)):
+def delete_proxy(proxy_id: UUID, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     """Удалить прокси"""
     from app.models.account import Account, AccountStatus
     
@@ -143,7 +146,7 @@ def delete_proxy(proxy_id: UUID, db: Session = Depends(get_db)):
 
 
 @router.post("/{proxy_id}/check", response_model=ProxyCheckResponse)
-def check_proxy(proxy_id: UUID, db: Session = Depends(get_db)):
+def check_proxy(proxy_id: UUID, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     """Проверить работоспособность прокси"""
     proxy = db.query(Proxy).filter(Proxy.id == proxy_id).first()
     if not proxy:
@@ -170,7 +173,7 @@ def check_proxy(proxy_id: UUID, db: Session = Depends(get_db)):
 
 
 @router.get("/available", response_model=List[ProxyResponse])
-def get_available_proxies(db: Session = Depends(get_db)):
+def get_available_proxies(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     """Получить список неиспользуемых прокси (не назначенных ни одному аккаунту)"""
     from app.models.account import Account
     
@@ -188,7 +191,7 @@ def get_available_proxies(db: Session = Depends(get_db)):
 
 
 @router.get("/{proxy_id}/accounts")
-def get_proxy_accounts(proxy_id: UUID, db: Session = Depends(get_db)):
+def get_proxy_accounts(proxy_id: UUID, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     """Получить список аккаунтов, использующих этот прокси"""
     from app.schemas.account import AccountResponse
     

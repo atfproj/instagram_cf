@@ -1,4 +1,4 @@
-import { Link, useLocation } from 'react-router-dom'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { 
   LayoutDashboard, 
   Users, 
@@ -6,10 +6,11 @@ import {
   FileImage, 
   Network,
   Menu,
-  X
+  LogOut
 } from 'lucide-react'
 import { useState } from 'react'
 import clsx from 'clsx'
+import { authApi } from '../api/auth'
 
 const navigation = [
   { name: 'Дашборд', href: '/dashboard', icon: LayoutDashboard },
@@ -55,7 +56,19 @@ export default function Layout({ children }) {
               <Menu className="h-6 w-6" />
             </button>
             <h1 className="text-2xl font-bold text-gray-900">Instagram Content Factory</h1>
-            <div className="w-10" /> {/* Spacer for mobile menu button */}
+            <div className="flex items-center gap-4">
+              <span className="text-sm text-gray-600">{authApi.getUser()?.username}</span>
+              <button
+                onClick={() => {
+                  authApi.logout()
+                  window.location.href = '/login'
+                }}
+                className="flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors"
+              >
+                <LogOut className="h-4 w-4" />
+                <span className="hidden sm:inline">Выйти</span>
+              </button>
+            </div>
           </div>
         </div>
 
