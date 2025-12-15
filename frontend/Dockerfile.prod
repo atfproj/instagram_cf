@@ -6,11 +6,15 @@ WORKDIR /app
 # Копирование package файлов
 COPY package*.json ./
 
-# Установка зависимостей
-RUN npm ci --only=production
+# Установка ВСЕХ зависимостей (включая devDependencies для vite)
+RUN npm install
 
 # Копирование остального кода
 COPY . .
+
+# ARG для переменных окружения во время сборки
+ARG VITE_API_URL
+ENV VITE_API_URL=${VITE_API_URL}
 
 # Build приложения
 RUN npm run build
