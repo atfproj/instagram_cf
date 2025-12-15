@@ -7,7 +7,8 @@ WORKDIR /app
 COPY package*.json ./
 
 # Установка ВСЕХ зависимостей (включая devDependencies для vite)
-RUN npm install
+# Используем npm install вместо npm ci, чтобы установить devDependencies
+RUN npm install --legacy-peer-deps
 
 # Копирование остального кода
 COPY . .
