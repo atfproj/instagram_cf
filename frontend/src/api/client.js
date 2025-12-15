@@ -1,8 +1,14 @@
 import axios from 'axios'
 
 // Если VITE_API_URL не указан или пустой, используем относительные пути (для nginx proxy)
-// Иначе используем указанный URL
+// В production используем пустую строку для относительных путей через nginx
+// В development используем localhost
 const API_BASE_URL = import.meta.env.VITE_API_URL || (import.meta.env.PROD ? '' : 'http://localhost:8009')
+
+// Логируем для отладки (только в development)
+if (!import.meta.env.PROD) {
+  console.log('API_BASE_URL:', API_BASE_URL)
+}
 
 const client = axios.create({
   baseURL: API_BASE_URL,

@@ -44,6 +44,7 @@ services:
       - REDIS_URL=${REDIS_URL}
       - CELERY_BROKER_URL=${CELERY_BROKER_URL}
       - CELERY_RESULT_BACKEND=${CELERY_RESULT_BACKEND}
+      - CORS_ORIGINS=${CORS_ORIGINS:-*}
     working_dir: /app
     ports:
       - "${APP_PORT:-8000}:8000"
@@ -86,11 +87,11 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile.prod
+      args:
+        - VITE_API_URL=${VITE_API_URL:-}
     container_name: instagram_cf_frontend
     ports:
       - "${FRONTEND_PORT:-80}:80"
-    environment:
-      - VITE_API_URL=${VITE_API_URL:-http://localhost:8000}
     depends_on:
       - app
     restart: unless-stopped
