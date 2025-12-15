@@ -91,15 +91,18 @@ services:
         - VITE_API_URL=${VITE_API_URL:-}
     container_name: instagram_cf_frontend
     ports:
-      - "${FRONTEND_PORT:-3001}:80"
+      - "3001:80"  # Внешний порт 3001, внутренний 80 (nginx)
     depends_on:
       - app
     restart: unless-stopped
-    network_mode: bridge
 
 volumes:
   postgres_data:
   redis_data:
   uploads_data:
+
+networks:
+  default:
+    name: instagram_cf_network
 
 
