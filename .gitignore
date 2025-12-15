@@ -41,3 +41,5 @@ alembic.ini.bak
 # Docker
 .dockerignore
 
+proxy.json
+=8.1.1

@@ -3,6 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from backend.app.core.config import settings
 from backend.app.core.database import engine, Base
 from backend.app.api import groups, accounts, posts, proxies, translations
+import os
 
 # Создание таблиц (в продакшене используем миграции)
 # Base.metadata.create_all(bind=engine)
@@ -10,12 +11,17 @@ from backend.app.api import groups, accounts, posts, proxies, translations
 app = FastAPI(
     title="Instagram Content Factory",
     description="Автоматизированный постинг контента на множество Instagram-аккаунтов",
-    version="1.0.0"
+    version="1.0.0",
+    docs_url="/docs" if settings.DEBUG else None,  # Отключаем docs в продакшене
+    redoc_url="/redoc" if settings.DEBUG else None,
 )
+
+# Настройка CORS
+cors_origins = os.getenv("CORS_ORIGINS", "*").split(",") if not settings.DEBUG else ["*"]
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # В продакшене указать конкретные домены
+    allow_origins=cors_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
