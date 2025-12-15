@@ -40,11 +40,11 @@ services:
       - uploads_data:/app/backend/static/uploads
     environment:
       - PYTHONPATH=/app:/app/backend
-      - DATABASE_URL=${DATABASE_URL}
-      - REDIS_URL=${REDIS_URL}
-      - CELERY_BROKER_URL=${CELERY_BROKER_URL}
-      - CELERY_RESULT_BACKEND=${CELERY_RESULT_BACKEND}
-      - CORS_ORIGINS=${CORS_ORIGINS:-*}
+      - DATABASE_URL=${DATABASE_URL:-postgresql://instagram_cf:${POSTGRES_PASSWORD}@db:5432/instagram_cf}
+      - REDIS_URL=${REDIS_URL:-redis://redis:6379/0}
+      - CELERY_BROKER_URL=${CELERY_BROKER_URL:-redis://redis:6379/0}
+      - CELERY_RESULT_BACKEND=${CELERY_RESULT_BACKEND:-redis://redis:6379/0}
+      - CORS_ORIGINS=${CORS_ORIGINS:-https://cf.atfmedia.ru,http://cf.atfmedia.ru}
     working_dir: /app
     ports:
       - "${APP_PORT:-8009}:8000"
@@ -57,7 +57,7 @@ services:
         condition: service_healthy
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -70,10 +70,10 @@ services:
       - uploads_data:/app/backend/static/uploads
     environment:
       - PYTHONPATH=/app:/app/backend
-      - CELERY_BROKER_URL=${CELERY_BROKER_URL}
-      - CELERY_RESULT_BACKEND=${CELERY_RESULT_BACKEND}
-      - REDIS_URL=${REDIS_URL}
-      - DATABASE_URL=${DATABASE_URL}
+      - CELERY_BROKER_URL=${CELERY_BROKER_URL:-redis://redis:6379/0}
+      - CELERY_RESULT_BACKEND=${CELERY_RESULT_BACKEND:-redis://redis:6379/0}
+      - REDIS_URL=${REDIS_URL:-redis://redis:6379/0}
+      - DATABASE_URL=${DATABASE_URL:-postgresql://instagram_cf:${POSTGRES_PASSWORD}@db:5432/instagram_cf}
     working_dir: /app
     env_file:
       - .env
@@ -88,10 +88,10 @@ services:
       context: ./frontend
       dockerfile: Dockerfile.prod
       args:
-        - VITE_API_URL=${VITE_API_URL:-}
+        - VITE_API_URL=https://cf.atfmedia.ru/api
     container_name: instagram_cf_frontend
     ports:
-      - "3001:80"  # Внешний порт 3001, внутренний 80 (nginx)
+      - "3001:80"
     depends_on:
       - app
     restart: unless-stopped
