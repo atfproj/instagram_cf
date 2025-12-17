@@ -1,7 +1,8 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
-from typing import List
+from typing import List, Optional
 from uuid import UUID
+from pydantic import BaseModel
 from app.core.database import get_db
 from app.core.security import encrypt_data, decrypt_data
 from app.models.account import Account, AccountStatus
@@ -394,4 +395,137 @@ def get_account_status(account_id: UUID, db: Session = Depends(get_db), current_
         "account": AccountResponse.from_orm(account),
         "instagram_status": result
     }
+
+
+class ProfileUpdate(BaseModel):
+    biography: Optional[str] = None
+    full_name: Optional[str] = None
+    external_url: Optional[str] = None
+    phone_number: Optional[str] = None
+    email: Optional[str] = None
+
+
+@router.get("/{account_id}/profile")
+def get_account_profile(account_id: UUID, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    """Получить информацию о профиле Instagram аккаунта"""
+    from app.services.instagram import InstagramService
+    from app.utils.logging import log_activity
+    from app.models.activity_log import LogStatus
+    from datetime import datetime
+    
+    account = db.query(Account).filter(Account.id == account_id).first()
+    if not account:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Аккаунт не найден"
+        )
+    
+    # Создаём сервис Instagram
+    instagram_service = InstagramService(account)
+    
+    # Получаем информацию о профиле
+    result = instagram_service.get_profile()
+    
+    if result["success"]:
+        # Логируем успех
+        log_activity(
+            db=db,
+            action="get_profile",
+            status=LogStatus.SUCCESS,
+            account_id=account_id,
+            duration_ms=result.get("duration_ms")
+        )
+        return result
+    else:
+        # Логируем ошибку
+        log_activity(
+            db=db,
+            action="get_profile",
+            status=LogStatus.FAILED,
+            account_id=account_id,
+            error_message=result.get("message")
+        )
+        
+        # Обновляем статус аккаунта при необходимости
+        if result.get("requires_login"):
+            from app.utils.logging import update_account_status
+            update_account_status(
+                db=db,
+                account=account,
+                new_status=AccountStatus.LOGIN_REQUIRED.value,
+                error_message="Требуется повторная авторизация"
+            )
+        
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=result.get("message", "Ошибка получения профиля")
+        )
+
+
+@router.put("/{account_id}/profile")
+def update_account_profile(
+    account_id: UUID,
+    profile_update: ProfileUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Обновить информацию профиля Instagram аккаунта"""
+    from app.services.instagram import InstagramService
+    from app.utils.logging import log_activity, update_account_status
+    from app.models.activity_log import LogStatus
+    from datetime import datetime
+    
+    account = db.query(Account).filter(Account.id == account_id).first()
+    if not account:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Аккаунт не найден"
+        )
+    
+    # Создаём сервис Instagram
+    instagram_service = InstagramService(account)
+    
+    # Обновляем профиль
+    result = instagram_service.update_profile(
+        biography=profile_update.biography,
+        full_name=profile_update.full_name,
+        external_url=profile_update.external_url,
+        phone_number=profile_update.phone_number,
+        email=profile_update.email
+    )
+    
+    if result["success"]:
+        # Логируем успех
+        log_activity(
+            db=db,
+            action="update_profile",
+            status=LogStatus.SUCCESS,
+            account_id=account_id,
+            details={"updated_fields": {k: v for k, v in profile_update.dict().items() if v is not None}},
+            duration_ms=result.get("duration_ms")
+        )
+        return result
+    else:
+        # Логируем ошибку
+        log_activity(
+            db=db,
+            action="update_profile",
+            status=LogStatus.FAILED,
+            account_id=account_id,
+            error_message=result.get("message")
+        )
+        
+        # Обновляем статус аккаунта при необходимости
+        if result.get("requires_login"):
+            update_account_status(
+                db=db,
+                account=account,
+                new_status=AccountStatus.LOGIN_REQUIRED.value,
+                error_message="Требуется повторная авторизация"
+            )
+        
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=result.get("message", "Ошибка обновления профиля")
+        )
 

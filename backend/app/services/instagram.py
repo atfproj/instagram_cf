@@ -436,4 +436,138 @@ class InstagramService:
         except Exception as e:
             logger.error(f"Ошибка при получении сессии: {e}")
             return {}
+    
+    def get_profile(self) -> Dict[str, Any]:
+        """
+        Получить информацию о профиле аккаунта
+        
+        Returns:
+            dict: {
+                "success": bool,
+                "profile": dict с информацией о профиле (bio, full_name, external_url и т.д.)
+            }
+        """
+        start_time = datetime.utcnow()
+        
+        try:
+            # Получаем информацию о текущем аккаунте
+            account_info = self.client.account_info()
+            
+            duration_ms = int((datetime.utcnow() - start_time).total_seconds() * 1000)
+            
+            return {
+                "success": True,
+                "profile": {
+                    "username": account_info.username,
+                    "full_name": account_info.full_name,
+                    "biography": account_info.biography,
+                    "external_url": account_info.external_url,
+                    "profile_pic_url": account_info.profile_pic_url,
+                    "follower_count": account_info.follower_count,
+                    "following_count": account_info.following_count,
+                    "media_count": account_info.media_count,
+                    "is_private": account_info.is_private,
+                    "is_verified": account_info.is_verified,
+                },
+                "duration_ms": duration_ms
+            }
+            
+        except LoginRequired:
+            return {
+                "success": False,
+                "message": "Требуется повторная авторизация",
+                "requires_login": True
+            }
+            
+        except Exception as e:
+            logger.error(f"Ошибка при получении профиля {self.account.username}: {e}", exc_info=True)
+            return {
+                "success": False,
+                "message": f"Ошибка получения профиля: {str(e)}"
+            }
+    
+    def update_profile(
+        self,
+        biography: Optional[str] = None,
+        full_name: Optional[str] = None,
+        external_url: Optional[str] = None,
+        phone_number: Optional[str] = None,
+        email: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """
+        Обновить информацию профиля
+        
+        Args:
+            biography: Описание профиля (bio)
+            full_name: Полное имя
+            external_url: Внешняя ссылка
+            phone_number: Номер телефона
+            email: Email
+            
+        Returns:
+            dict: {
+                "success": bool,
+                "message": str,
+                "profile": dict (если успешно)
+            }
+        """
+        start_time = datetime.utcnow()
+        
+        try:
+            # Формируем словарь с параметрами для обновления
+            update_params = {}
+            if biography is not None:
+                update_params['biography'] = biography
+            if full_name is not None:
+                update_params['full_name'] = full_name
+            if external_url is not None:
+                update_params['external_url'] = external_url
+            if phone_number is not None:
+                update_params['phone_number'] = phone_number
+            if email is not None:
+                update_params['email'] = email
+            
+            if not update_params:
+                return {
+                    "success": False,
+                    "message": "Не указаны параметры для обновления"
+                }
+            
+            # Обновляем профиль
+            account_info = self.client.account_edit(**update_params)
+            
+            duration_ms = int((datetime.utcnow() - start_time).total_seconds() * 1000)
+            
+            return {
+                "success": True,
+                "message": "Профиль успешно обновлён",
+                "profile": {
+                    "username": account_info.username,
+                    "full_name": account_info.full_name,
+                    "biography": account_info.biography,
+                    "external_url": account_info.external_url,
+                },
+                "duration_ms": duration_ms
+            }
+            
+        except LoginRequired:
+            return {
+                "success": False,
+                "message": "Требуется повторная авторизация",
+                "requires_login": True
+            }
+            
+        except PleaseWaitFewMinutes as e:
+            return {
+                "success": False,
+                "message": f"Слишком много действий. Подождите: {str(e)}",
+                "rate_limited": True
+            }
+            
+        except Exception as e:
+            logger.error(f"Ошибка при обновлении профиля {self.account.username}: {e}", exc_info=True)
+            return {
+                "success": False,
+                "message": f"Ошибка обновления профиля: {str(e)}"
+            }
 

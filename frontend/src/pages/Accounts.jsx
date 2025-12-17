@@ -2,13 +2,15 @@ import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from 'react-query'
 import { accountsApi } from '../api/accounts'
 import { groupsApi } from '../api/groups'
-import { Plus, Edit, Trash2, LogIn, RefreshCw, CheckCircle, XCircle, Clock } from 'lucide-react'
+import { Plus, Edit, Trash2, LogIn, RefreshCw, CheckCircle, XCircle, Clock, User } from 'lucide-react'
 import Modal from '../components/Modal'
 import AccountForm from '../components/AccountForm'
+import ProfileModal from '../components/ProfileModal'
 
 export default function Accounts() {
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [editingAccount, setEditingAccount] = useState(null)
+  const [profileAccount, setProfileAccount] = useState(null)
   const queryClient = useQueryClient()
 
   const { data: accounts, isLoading } = useQuery('accounts', () => 
@@ -132,6 +134,13 @@ export default function Accounts() {
                     <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                       <div className="flex items-center justify-end gap-2">
                         <button
+                          onClick={() => setProfileAccount(account)}
+                          className="text-purple-600 hover:text-purple-900"
+                          title="Управление профилем"
+                        >
+                          <User className="h-4 w-4" />
+                        </button>
+                        <button
                           onClick={() => loginMutation.mutate(account.id)}
                           className="text-primary-600 hover:text-primary-900"
                           title="Авторизоваться"
@@ -179,6 +188,13 @@ export default function Accounts() {
           }}
         />
       </Modal>
+
+      {profileAccount && (
+        <ProfileModal
+          account={profileAccount}
+          onClose={() => setProfileAccount(null)}
+        />
+      )}
     </div>
   )
 }

@@ -8,5 +8,7 @@ export const accountsApi = {
   delete: (id) => client.delete(`/api/accounts/${id}`),
   login: (id) => client.post(`/api/accounts/${id}/login`),
   getStatus: (id) => client.get(`/api/accounts/${id}/status`),
+  getProfile: (id) => client.get(`/api/accounts/${id}/profile`),
+  updateProfile: (id, data) => client.put(`/api/accounts/${id}/profile`, data),
 }
 
