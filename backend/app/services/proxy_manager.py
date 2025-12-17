@@ -30,6 +30,7 @@ class ProxyManager:
             }
         """
         start_time = datetime.utcnow()
+        instagram_accessible = False  # Инициализация переменной
         
         try:
             # Настройка прокси для httpx

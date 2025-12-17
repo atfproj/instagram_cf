@@ -277,11 +277,37 @@ def task_batch_post(self, post_id: str) -> Dict[str, Any]:
             )
             translations[lang] = result["translated_text"] if result["success"] else post.caption_original
         
-        # Создаём задачи для каждого аккаунта
+        # Группируем аккаунты по языку для персонализации
+        from collections import defaultdict
+        accounts_by_language = defaultdict(list)
+        for account in accounts_to_post:
+            accounts_by_language[account.language].append(account)
+        
+        # Создаём задачи для каждого аккаунта с персонализацией
         created_tasks = 0
         for account in accounts_to_post:
             # Получаем переведённый текст
             translated_caption = translations.get(account.language, post.caption_original)
+            
+            # Если в группе несколько аккаунтов с одинаковым языком, персонализируем текст
+            accounts_with_same_lang = accounts_by_language[account.language]
+            if len(accounts_with_same_lang) > 1:
+                # Находим индекс текущего аккаунта в списке аккаунтов с тем же языком
+                account_index = accounts_with_same_lang.index(account)
+                
+                # Перефразируем текст для создания вариации
+                paraphrase_result = translator_service.paraphrase(
+                    text=translated_caption,
+                    language=account.language,
+                    db=db,
+                    variation_index=account_index
+                )
+                
+                if paraphrase_result["success"]:
+                    translated_caption = paraphrase_result["paraphrased_text"]
+                    logger.info(f"Текст персонализирован для {account.username} (язык: {account.language}, вариация {account_index})")
+                else:
+                    logger.warning(f"Не удалось персонализировать текст для {account.username}, используется базовый перевод")
             
             # Создаём запись PostExecution
             execution = PostExecution(

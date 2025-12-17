@@ -1,6 +1,7 @@
 import logging
 import hashlib
-from typing import Optional, Dict, Any
+import re
+from typing import Optional, Dict, Any, Tuple
 from sqlalchemy.orm import Session
 from openai import OpenAI
 from app.core.config import settings
@@ -56,6 +57,42 @@ class TranslatorService:
     def _get_language_name(self, lang_code: str) -> str:
         """Получить название языка для промпта"""
         return LANGUAGE_NAMES.get(lang_code.lower(), lang_code)
+    
+    def _extract_hashtags(self, text: str) -> Tuple[str, str]:
+        """
+        Извлечь хештеги из текста
+        
+        Args:
+            text: Исходный текст
+            
+        Returns:
+            Tuple[str, str]: (текст без хештегов, строка с хештегами)
+        """
+        # Находим все хештеги (слова, начинающиеся с #)
+        hashtags = re.findall(r'#\w+', text)
+        hashtags_str = ' '.join(hashtags) if hashtags else ''
+        
+        # Удаляем хештеги из текста
+        text_without_hashtags = re.sub(r'#\w+\s*', '', text).strip()
+        
+        return text_without_hashtags, hashtags_str
+    
+    def _restore_hashtags(self, text: str, hashtags: str) -> str:
+        """
+        Восстановить хештеги в тексте
+        
+        Args:
+            text: Текст без хештегов
+            hashtags: Строка с хештегами
+            
+        Returns:
+            str: Текст с хештегами в конце
+        """
+        if not hashtags:
+            return text
+        
+        # Добавляем хештеги в конец текста
+        return f"{text}\n\n{hashtags}".strip()
     
     def translate(
         self,
@@ -205,6 +242,99 @@ class TranslatorService:
                 results[text] = text  # Оставляем оригинал при ошибке
         
         return results
+    
+    def paraphrase(
+        self,
+        text: str,
+        language: str,
+        db: Session,
+        variation_index: int = 0
+    ) -> Dict[str, Any]:
+        """
+        Перефразировать текст, сохраняя смысл и хештеги
+        
+        Args:
+            text: Исходный текст
+            language: Язык текста
+            db: Сессия БД
+            variation_index: Индекс вариации (для создания разных вариантов)
+            
+        Returns:
+            dict: {
+                "success": bool,
+                "paraphrased_text": str,
+                "error": str (если ошибка)
+            }
+        """
+        if not self.client:
+            return {
+                "success": False,
+                "paraphrased_text": text,
+                "error": "DeepSeek API ключ не настроен"
+            }
+        
+        try:
+            # Извлекаем хештеги
+            text_without_hashtags, hashtags = self._extract_hashtags(text)
+            
+            # Если текст пустой (только хештеги), возвращаем оригинал
+            if not text_without_hashtags.strip():
+                return {
+                    "success": True,
+                    "paraphrased_text": text
+                }
+            
+            lang_name = self._get_language_name(language)
+            
+            # Формируем промпт для перефразирования
+            prompt = f"""Перефразируй следующий текст на {lang_name}, сохранив смысл и эмоциональную окраску.
+Используй другие слова и конструкции, но сохрани основную мысль.
+Сохрани все эмодзи и форматирование.
+Не добавляй никаких пояснений или комментариев.
+
+Текст для перефразирования:
+{text_without_hashtags}"""
+            
+            # Используем немного более высокую температуру для вариативности
+            temperature = 0.5 + (variation_index * 0.1)  # 0.5, 0.6, 0.7 и т.д.
+            temperature = min(temperature, 0.8)  # Максимум 0.8
+            
+            # Отправляем запрос к DeepSeek API
+            response = self.client.chat.completions.create(
+                model="deepseek-chat",
+                messages=[
+                    {
+                        "role": "system",
+                        "content": "Ты профессиональный копирайтер. Перефразируй текст, сохраняя смысл, но используя другие слова и конструкции."
+                    },
+                    {
+                        "role": "user",
+                        "content": prompt
+                    }
+                ],
+                temperature=temperature,
+                max_tokens=2000
+            )
+            
+            paraphrased_text = response.choices[0].message.content.strip()
+            
+            # Восстанавливаем хештеги
+            final_text = self._restore_hashtags(paraphrased_text, hashtags)
+            
+            logger.info(f"Перефразирование выполнено для языка {language}, вариация {variation_index}")
+            
+            return {
+                "success": True,
+                "paraphrased_text": final_text
+            }
+            
+        except Exception as e:
+            logger.error(f"Ошибка при перефразировании через DeepSeek: {e}", exc_info=True)
+            return {
+                "success": False,
+                "paraphrased_text": text,  # Возвращаем оригинал при ошибке
+                "error": str(e)
+            }
 
 
 # Глобальный экземпляр сервиса
