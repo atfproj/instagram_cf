@@ -610,9 +610,26 @@ class InstagramService:
             current_is_private = getattr(current_info, 'is_private', None)
             logger.info(f"Текущая приватность профиля {self.account.username}: {current_is_private}, запрашиваем: {is_private}")
             
-            # Используем только официальный метод account_edit с параметром is_private
-            # Это безопасный метод из библиотеки instagrapi
-            account_info = self.client.account_edit(is_private=is_private)
+            # Если приватность уже такая, какая нужна, возвращаем успех
+            if current_is_private == is_private:
+                privacy_status = "приватным" if is_private else "публичным"
+                return {
+                    "success": True,
+                    "message": f"Профиль уже {privacy_status}",
+                    "is_private": current_is_private,
+                    "duration_ms": 0
+                }
+            
+            # Используем официальные методы instagrapi для изменения приватности
+            # account_set_private() и account_set_public() - это безопасные методы библиотеки
+            if is_private:
+                # Делаем профиль приватным
+                self.client.account_set_private()
+                logger.info(f"Вызван account_set_private() для {self.account.username}")
+            else:
+                # Делаем профиль публичным
+                self.client.account_set_public()
+                logger.info(f"Вызван account_set_public() для {self.account.username}")
             
             duration_ms = int((datetime.utcnow() - start_time).total_seconds() * 1000)
             
@@ -627,7 +644,7 @@ class InstagramService:
                 logger.warning(f"Приватность не изменилась! Ожидалось {is_private}, получили {new_is_private}")
                 return {
                     "success": False,
-                    "message": f"Не удалось изменить приватность. Текущий статус: {'приватный' if new_is_private else 'публичный'}",
+                    "message": f"Не удалось изменить приватность. Текущий статус: {'приватный' if new_is_private else 'публичный'}. Возможно, Instagram требует подтверждённый email или телефон для изменения приватности.",
                     "is_private": new_is_private
                 }
             
