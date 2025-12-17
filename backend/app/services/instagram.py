@@ -605,17 +605,38 @@ class InstagramService:
         start_time = datetime.utcnow()
         
         try:
-            # Изменяем приватность профиля
+            # Получаем текущее состояние профиля перед изменением
+            current_info = self.client.account_info()
+            current_is_private = getattr(current_info, 'is_private', None)
+            logger.info(f"Текущая приватность профиля {self.account.username}: {current_is_private}, запрашиваем: {is_private}")
+            
+            # Используем только официальный метод account_edit с параметром is_private
+            # Это безопасный метод из библиотеки instagrapi
             account_info = self.client.account_edit(is_private=is_private)
             
             duration_ms = int((datetime.utcnow() - start_time).total_seconds() * 1000)
+            
+            # Проверяем результат - получаем обновленную информацию
+            updated_info = self.client.account_info()
+            new_is_private = getattr(updated_info, 'is_private', None)
+            
+            logger.info(f"Приватность после изменения: {new_is_private}, ожидалось: {is_private}")
+            
+            # Проверяем, что изменение действительно произошло
+            if new_is_private != is_private:
+                logger.warning(f"Приватность не изменилась! Ожидалось {is_private}, получили {new_is_private}")
+                return {
+                    "success": False,
+                    "message": f"Не удалось изменить приватность. Текущий статус: {'приватный' if new_is_private else 'публичный'}",
+                    "is_private": new_is_private
+                }
             
             privacy_status = "приватным" if is_private else "публичным"
             
             return {
                 "success": True,
                 "message": f"Профиль успешно сделан {privacy_status}",
-                "is_private": account_info.is_private if hasattr(account_info, 'is_private') else is_private,
+                "is_private": new_is_private,
                 "duration_ms": duration_ms
             }
             
