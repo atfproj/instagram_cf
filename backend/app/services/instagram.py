@@ -455,20 +455,37 @@ class InstagramService:
             
             duration_ms = int((datetime.utcnow() - start_time).total_seconds() * 1000)
             
+            # Логируем тип объекта для отладки
+            logger.debug(f"account_info type: {type(account_info)}, dir: {dir(account_info)[:10] if hasattr(account_info, '__dict__') else 'N/A'}")
+            
+            # Безопасное извлечение полей (обрабатываем и объекты, и словари)
+            def safe_get(obj, attr, default=None):
+                """Безопасное получение атрибута или ключа"""
+                try:
+                    if isinstance(obj, dict):
+                        return obj.get(attr, default)
+                    return getattr(obj, attr, default)
+                except Exception as e:
+                    logger.warning(f"Ошибка при получении атрибута {attr}: {e}")
+                    return default
+            
+            # Извлекаем данные с fallback значениями
+            profile_data = {
+                "username": safe_get(account_info, 'username', ''),
+                "full_name": safe_get(account_info, 'full_name', ''),
+                "biography": safe_get(account_info, 'biography', ''),
+                "external_url": safe_get(account_info, 'external_url', ''),
+                "profile_pic_url": safe_get(account_info, 'profile_pic_url') or safe_get(account_info, 'profile_pic_url_hd', ''),
+                "follower_count": safe_get(account_info, 'follower_count', 0),
+                "following_count": safe_get(account_info, 'following_count', 0),
+                "media_count": safe_get(account_info, 'media_count', 0),
+                "is_private": safe_get(account_info, 'is_private', False),
+                "is_verified": safe_get(account_info, 'is_verified', False),
+            }
+            
             return {
                 "success": True,
-                "profile": {
-                    "username": account_info.username,
-                    "full_name": account_info.full_name,
-                    "biography": account_info.biography,
-                    "external_url": account_info.external_url,
-                    "profile_pic_url": account_info.profile_pic_url,
-                    "follower_count": account_info.follower_count,
-                    "following_count": account_info.following_count,
-                    "media_count": account_info.media_count,
-                    "is_private": account_info.is_private,
-                    "is_verified": account_info.is_verified,
-                },
+                "profile": profile_data,
                 "duration_ms": duration_ms
             }
             
