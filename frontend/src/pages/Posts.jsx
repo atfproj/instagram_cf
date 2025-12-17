@@ -165,7 +165,7 @@ function PostDetailsModal({ post, groups, onClose }) {
         {executions?.statistics && (
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">Статистика публикации</label>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-2 gap-4 mb-4">
               <div className="text-center p-3 bg-gray-50 rounded-lg">
                 <div className="text-2xl font-bold text-gray-900">{executions.statistics.success}</div>
                 <div className="text-xs text-gray-500">Успешно</div>
@@ -184,6 +184,132 @@ function PostDetailsModal({ post, groups, onClose }) {
               </div>
             </div>
           </div>
+        )}
+
+        {executions?.executions && executions.executions.length > 0 && (
+          <>
+            {/* Опубликованные аккаунты */}
+            {executions.executions.filter(e => e.status === 'success').length > 0 && (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Опубликовано ({executions.executions.filter(e => e.status === 'success').length})
+                </label>
+                <div className="space-y-2 max-h-48 overflow-y-auto">
+                  {executions.executions
+                    .filter(e => e.status === 'success')
+                    .map((exec) => (
+                      <div key={exec.id} className="flex items-start gap-2 p-2 bg-green-50 rounded border border-green-200">
+                        <div className="flex-1 min-w-0">
+                          <div className="font-medium text-sm text-gray-900 truncate">
+                            @{exec.account_username || 'Неизвестно'}
+                          </div>
+                          <div 
+                            className="text-xs text-gray-600 truncate mt-1"
+                            title={exec.caption_translated}
+                          >
+                            {exec.caption_translated.length > 60 
+                              ? `${exec.caption_translated.substring(0, 60)}...` 
+                              : exec.caption_translated}
+                          </div>
+                          {exec.posted_at && (
+                            <div className="text-xs text-gray-400 mt-1">
+                              {new Date(exec.posted_at).toLocaleString('ru-RU')}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                </div>
+              </div>
+            )}
+
+            {/* Аккаунты в очереди */}
+            {executions.executions.filter(e => e.status === 'queued').length > 0 && (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  В очереди ({executions.executions.filter(e => e.status === 'queued').length})
+                </label>
+                <div className="space-y-2 max-h-48 overflow-y-auto">
+                  {executions.executions
+                    .filter(e => e.status === 'queued')
+                    .map((exec) => (
+                      <div key={exec.id} className="flex items-start gap-2 p-2 bg-yellow-50 rounded border border-yellow-200">
+                        <div className="flex-1 min-w-0">
+                          <div className="font-medium text-sm text-gray-900 truncate">
+                            @{exec.account_username || 'Неизвестно'}
+                          </div>
+                          <div 
+                            className="text-xs text-gray-600 truncate mt-1"
+                            title={exec.caption_translated}
+                          >
+                            {exec.caption_translated.length > 60 
+                              ? `${exec.caption_translated.substring(0, 60)}...` 
+                              : exec.caption_translated}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                </div>
+              </div>
+            )}
+
+            {/* Публикуется */}
+            {executions.executions.filter(e => e.status === 'posting').length > 0 && (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Публикуется ({executions.executions.filter(e => e.status === 'posting').length})
+                </label>
+                <div className="space-y-2 max-h-48 overflow-y-auto">
+                  {executions.executions
+                    .filter(e => e.status === 'posting')
+                    .map((exec) => (
+                      <div key={exec.id} className="flex items-start gap-2 p-2 bg-blue-50 rounded border border-blue-200">
+                        <div className="flex-1 min-w-0">
+                          <div className="font-medium text-sm text-gray-900 truncate">
+                            @{exec.account_username || 'Неизвестно'}
+                          </div>
+                          <div 
+                            className="text-xs text-gray-600 truncate mt-1"
+                            title={exec.caption_translated}
+                          >
+                            {exec.caption_translated.length > 60 
+                              ? `${exec.caption_translated.substring(0, 60)}...` 
+                              : exec.caption_translated}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                </div>
+              </div>
+            )}
+
+            {/* Ошибки */}
+            {executions.executions.filter(e => e.status === 'failed').length > 0 && (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Ошибки ({executions.executions.filter(e => e.status === 'failed').length})
+                </label>
+                <div className="space-y-2 max-h-48 overflow-y-auto">
+                  {executions.executions
+                    .filter(e => e.status === 'failed')
+                    .map((exec) => (
+                      <div key={exec.id} className="flex items-start gap-2 p-2 bg-red-50 rounded border border-red-200">
+                        <div className="flex-1 min-w-0">
+                          <div className="font-medium text-sm text-gray-900 truncate">
+                            @{exec.account_username || 'Неизвестно'}
+                          </div>
+                          {exec.error_message && (
+                            <div className="text-xs text-red-600 mt-1">
+                              {exec.error_message}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                </div>
+              </div>
+            )}
+          </>
         )}
       </div>
     </Modal>

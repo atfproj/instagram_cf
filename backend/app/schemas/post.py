@@ -26,6 +26,7 @@ class PostUpdate(BaseModel):
 class PostExecutionResponse(BaseModel):
     id: UUID
     account_id: UUID
+    account_username: Optional[str] = None
     caption_translated: str
     instagram_media_id: Optional[str]
     status: PostExecutionStatus

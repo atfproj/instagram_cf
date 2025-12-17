@@ -201,9 +201,11 @@ def publish_post(post_id: UUID, db: Session = Depends(get_db), current_user: Use
     }
 
 
-@router.get("/{post_id}/executions", response_model=List[PostExecutionResponse])
+@router.get("/{post_id}/executions")
 def get_post_executions(post_id: UUID, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     """Получить статус публикации по аккаунтам"""
+    from collections import Counter
+    
     post = db.query(Post).filter(Post.id == post_id).first()
     if not post:
         raise HTTPException(
@@ -213,8 +215,31 @@ def get_post_executions(post_id: UUID, db: Session = Depends(get_db), current_us
     
     executions = db.query(PostExecution).filter(PostExecution.post_id == post_id).all()
     
-    # Возвращаем список executions (как указано в response_model)
-    return [PostExecutionResponse.from_orm(e) for e in executions]
+    # Загружаем аккаунты для получения username
+    account_ids = [e.account_id for e in executions]
+    accounts = {acc.id: acc for acc in db.query(Account).filter(Account.id.in_(account_ids)).all()}
+    
+    # Формируем ответы с username
+    executions_data = []
+    for e in executions:
+        account = accounts.get(e.account_id)
+        exec_dict = PostExecutionResponse.from_orm(e).dict()
+        exec_dict['account_username'] = account.username if account else None
+        executions_data.append(exec_dict)
+    
+    # Подсчитываем статистику
+    status_counts = Counter(e.status.value for e in executions)
+    
+    return {
+        "executions": executions_data,
+        "statistics": {
+            "total": len(executions),
+            "success": status_counts.get("success", 0),
+            "failed": status_counts.get("failed", 0),
+            "queued": status_counts.get("queued", 0),
+            "posting": status_counts.get("posting", 0)
+        }
+    }
 
 
 @router.post("/{post_id}/translate")
