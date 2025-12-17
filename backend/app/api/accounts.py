@@ -266,6 +266,13 @@ def login_account(account_id: UUID, db: Session = Depends(get_db), current_user:
     # Пытаемся авторизоваться
     result = instagram_service.login()
     
+    # Логируем результат авторизации для отладки
+    import logging
+    logger = logging.getLogger(__name__)
+    logger.info(f"Результат авторизации для аккаунта {db_account.username}: success={result.get('success')}, message={result.get('message')}")
+    if not result.get("success"):
+        logger.warning(f"Ошибка авторизации для {db_account.username}: {result.get('message')}, тип ошибки: {result.keys()}")
+    
     if result["success"]:
         # Сохраняем сессию
         db_account.session_data = result["session_data"]

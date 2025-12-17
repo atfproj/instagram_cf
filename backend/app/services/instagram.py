@@ -143,16 +143,20 @@ class InstagramService:
             }
             
         except ChallengeRequired as e:
+            logger.warning(f"ChallengeRequired для {self.account.username}: {str(e)}")
             return {
                 "success": False,
                 "message": f"Требуется подтверждение: {str(e)}",
-                "requires_challenge": True
+                "requires_challenge": True,
+                "error_type": "ChallengeRequired"
             }
             
-        except BadPassword:
+        except BadPassword as e:
+            logger.error(f"BadPassword для {self.account.username}: {str(e)}")
             return {
                 "success": False,
-                "message": "Неверный пароль"
+                "message": "Неверный пароль",
+                "error_type": "BadPassword"
             }
             
         except (UserError, UserNotFound):
