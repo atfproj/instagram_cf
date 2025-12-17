@@ -88,7 +88,7 @@ services:
       context: ./frontend
       dockerfile: Dockerfile.prod
       args:
-        - VITE_API_URL=
+        VITE_API_URL: ""
     container_name: instagram_cf_frontend
     ports:
       - "3002:80"
