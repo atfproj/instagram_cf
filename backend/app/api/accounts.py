@@ -529,3 +529,69 @@ def update_account_profile(
             detail=result.get("message", "Ошибка обновления профиля")
         )
 
+
+class ProfilePrivacyUpdate(BaseModel):
+    is_private: bool
+
+
+@router.post("/{account_id}/profile/privacy")
+def toggle_profile_privacy(
+    account_id: UUID,
+    privacy_update: ProfilePrivacyUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Изменить приватность профиля (открыть/закрыть)"""
+    from app.services.instagram import InstagramService
+    from app.utils.logging import log_activity, update_account_status
+    from app.models.activity_log import LogStatus
+    from datetime import datetime
+    
+    account = db.query(Account).filter(Account.id == account_id).first()
+    if not account:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Аккаунт не найден"
+        )
+    
+    # Создаём сервис Instagram
+    instagram_service = InstagramService(account)
+    
+    # Изменяем приватность профиля
+    result = instagram_service.set_profile_privacy(privacy_update.is_private)
+    
+    if result["success"]:
+        # Логируем успех
+        log_activity(
+            db=db,
+            action="set_profile_privacy",
+            status=LogStatus.SUCCESS,
+            account_id=account_id,
+            details={"is_private": privacy_update.is_private},
+            duration_ms=result.get("duration_ms")
+        )
+        return result
+    else:
+        # Логируем ошибку
+        log_activity(
+            db=db,
+            action="set_profile_privacy",
+            status=LogStatus.FAILED,
+            account_id=account_id,
+            error_message=result.get("message")
+        )
+        
+        # Обновляем статус аккаунта при необходимости
+        if result.get("requires_login"):
+            update_account_status(
+                db=db,
+                account=account,
+                new_status=AccountStatus.LOGIN_REQUIRED.value,
+                error_message="Требуется повторная авторизация"
+            )
+        
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=result.get("message", "Ошибка изменения приватности")
+        )
+

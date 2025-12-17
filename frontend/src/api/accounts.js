@@ -10,5 +10,8 @@ export const accountsApi = {
   getStatus: (id) => client.get(`/api/accounts/${id}/status`),
   getProfile: (id) => client.get(`/api/accounts/${id}/profile`),
   updateProfile: (id, data) => client.put(`/api/accounts/${id}/profile`, data),
+  setProfilePrivacy: (id, isPrivate) => client.post(`/api/accounts/${id}/profile/privacy`, {
+    is_private: isPrivate
+  }),
 }
 

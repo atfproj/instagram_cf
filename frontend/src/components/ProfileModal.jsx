@@ -1,15 +1,13 @@
 import { useState, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from 'react-query'
 import { accountsApi } from '../api/accounts'
-import { ExternalLink, Loader2, Save, RefreshCw } from 'lucide-react'
+import { Loader2, Save, RefreshCw, Lock, Unlock } from 'lucide-react'
 
 export default function ProfileModal({ account, onClose }) {
   const [formData, setFormData] = useState({
     biography: '',
     full_name: '',
-    external_url: '',
-    phone_number: '',
-    email: ''
+    external_url: ''
   })
   const queryClient = useQueryClient()
 
@@ -24,9 +22,7 @@ export default function ProfileModal({ account, onClose }) {
           setFormData({
             biography: data.profile.biography || '',
             full_name: data.profile.full_name || '',
-            external_url: data.profile.external_url || '',
-            phone_number: '',
-            email: ''
+            external_url: data.profile.external_url || ''
           })
         }
       }
@@ -46,18 +42,46 @@ export default function ProfileModal({ account, onClose }) {
     }
   )
 
+  const privacyMutation = useMutation(
+    (isPrivate) => accountsApi.setProfilePrivacy(account.id, isPrivate),
+    {
+      onSuccess: () => {
+        queryClient.invalidateQueries(['account-profile', account.id])
+        alert('Приватность профиля успешно изменена!')
+      },
+      onError: (error) => {
+        alert(`Ошибка: ${error.message}`)
+      }
+    }
+  )
+
   const handleSubmit = async (e) => {
     e.preventDefault()
-    await updateMutation.mutateAsync(formData)
+    // Отправляем только заполненные поля (не отправляем phone_number и email)
+    const updateData = {
+      biography: formData.biography || null,
+      full_name: formData.full_name || null,
+      external_url: formData.external_url || null,
+    }
+    // Удаляем null значения
+    Object.keys(updateData).forEach(key => {
+      if (updateData[key] === null || updateData[key] === '') {
+        delete updateData[key]
+      }
+    })
+    await updateMutation.mutateAsync(updateData)
   }
 
   const handleChange = (field, value) => {
     setFormData(prev => ({ ...prev, [field]: value }))
   }
 
-  const openProfilePage = () => {
-    if (profileData?.profile?.username) {
-      window.open(`https://www.instagram.com/${profileData.profile.username}/`, '_blank')
+  const handleTogglePrivacy = async () => {
+    const currentIsPrivate = profileData?.profile?.is_private
+    const newIsPrivate = !currentIsPrivate
+    
+    if (confirm(`Вы уверены, что хотите сделать профиль ${newIsPrivate ? 'приватным' : 'публичным'}?`)) {
+      await privacyMutation.mutateAsync(newIsPrivate)
     }
   }
 
@@ -69,16 +93,6 @@ export default function ProfileModal({ account, onClose }) {
         <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between">
           <h2 className="text-xl font-bold text-gray-900">Профиль аккаунта</h2>
           <div className="flex items-center gap-2">
-            {profileData?.profile && (
-              <button
-                onClick={openProfilePage}
-                className="btn btn-sm btn-outline flex items-center gap-2"
-                title="Открыть профиль в Instagram"
-              >
-                <ExternalLink className="h-4 w-4" />
-                Открыть профиль
-              </button>
-            )}
             <button
               onClick={refetch}
               className="btn btn-sm btn-outline flex items-center gap-2"
@@ -117,12 +131,32 @@ export default function ProfileModal({ account, onClose }) {
                     <span className="text-gray-500">Постов:</span>
                     <span className="ml-2 font-medium">{profileData.profile.media_count?.toLocaleString() || '—'}</span>
                   </div>
-                  <div>
+                  <div className="flex items-center gap-2">
                     <span className="text-gray-500">Статус:</span>
-                    <span className="ml-2 font-medium">
+                    <span className="font-medium">
                       {profileData.profile.is_private ? '🔒 Приватный' : '🌐 Публичный'}
                       {profileData.profile.is_verified && ' ✓'}
                     </span>
+                    <button
+                      onClick={handleTogglePrivacy}
+                      className="btn btn-xs btn-outline flex items-center gap-1"
+                      disabled={privacyMutation.isLoading}
+                      title={profileData.profile.is_private ? 'Сделать профиль публичным' : 'Сделать профиль приватным'}
+                    >
+                      {privacyMutation.isLoading ? (
+                        <Loader2 className="h-3 w-3 animate-spin" />
+                      ) : profileData.profile.is_private ? (
+                        <>
+                          <Unlock className="h-3 w-3" />
+                          Открыть
+                        </>
+                      ) : (
+                        <>
+                          <Lock className="h-3 w-3" />
+                          Закрыть
+                        </>
+                      )}
+                    </button>
                   </div>
                 </div>
                 {profileData.profile.profile_pic_url && (

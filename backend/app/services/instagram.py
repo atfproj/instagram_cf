@@ -532,17 +532,17 @@ class InstagramService:
         
         try:
             # Формируем словарь с параметрами для обновления
+            # НЕ передаём email и phone_number, если они не указаны (Instagram требует подтверждённый email/телефон)
             update_params = {}
-            if biography is not None:
+            if biography is not None and biography.strip():
                 update_params['biography'] = biography
-            if full_name is not None:
+            if full_name is not None and full_name.strip():
                 update_params['full_name'] = full_name
             if external_url is not None:
+                # Пустая строка для external_url допустима (удаление ссылки)
                 update_params['external_url'] = external_url
-            if phone_number is not None:
-                update_params['phone_number'] = phone_number
-            if email is not None:
-                update_params['email'] = email
+            # НЕ передаём phone_number и email, если они не указаны
+            # Instagram требует подтверждённый email или телефон для обновления профиля
             
             if not update_params:
                 return {
@@ -586,5 +586,57 @@ class InstagramService:
             return {
                 "success": False,
                 "message": f"Ошибка обновления профиля: {str(e)}"
+            }
+    
+    def set_profile_privacy(self, is_private: bool) -> Dict[str, Any]:
+        """
+        Изменить приватность профиля (открыть/закрыть)
+        
+        Args:
+            is_private: True - сделать приватным, False - сделать публичным
+            
+        Returns:
+            dict: {
+                "success": bool,
+                "message": str,
+                "is_private": bool (если успешно)
+            }
+        """
+        start_time = datetime.utcnow()
+        
+        try:
+            # Изменяем приватность профиля
+            account_info = self.client.account_edit(is_private=is_private)
+            
+            duration_ms = int((datetime.utcnow() - start_time).total_seconds() * 1000)
+            
+            privacy_status = "приватным" if is_private else "публичным"
+            
+            return {
+                "success": True,
+                "message": f"Профиль успешно сделан {privacy_status}",
+                "is_private": account_info.is_private if hasattr(account_info, 'is_private') else is_private,
+                "duration_ms": duration_ms
+            }
+            
+        except LoginRequired:
+            return {
+                "success": False,
+                "message": "Требуется повторная авторизация",
+                "requires_login": True
+            }
+            
+        except PleaseWaitFewMinutes as e:
+            return {
+                "success": False,
+                "message": f"Слишком много действий. Подождите: {str(e)}",
+                "rate_limited": True
+            }
+            
+        except Exception as e:
+            logger.error(f"Ошибка при изменении приватности профиля {self.account.username}: {e}", exc_info=True)
+            return {
+                "success": False,
+                "message": f"Ошибка изменения приватности: {str(e)}"
             }
 
