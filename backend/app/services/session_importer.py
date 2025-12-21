@@ -257,16 +257,25 @@ def validate_session(session_data: Dict[str, Any], proxy_url: Optional[str] = No
         
         logger.info(f"✅ Сессия валидна! Username: {user_info.username}, User ID: {user_info.pk}")
         
+        # Безопасное извлечение полей
+        def safe_get(obj, attr, default=None):
+            """Безопасное получение атрибута или ключа"""
+            try:
+                if isinstance(obj, dict):
+                    return obj.get(attr, default)
+                else:
+                    return getattr(obj, attr, default)
+            except (AttributeError, KeyError, TypeError):
+                return default
+
         return {
             'success': True,
             'message': 'Сессия валидна',
             'user_info': {
-                'username': user_info.username,
-                'full_name': user_info.full_name,
-                'user_id': user_info.pk,
-                'follower_count': user_info.follower_count,
-                'following_count': user_info.following_count,
-                'is_private': user_info.is_private,
+                'username': safe_get(user_info, 'username', ''),
+                'full_name': safe_get(user_info, 'full_name', ''),
+                'user_id': safe_get(user_info, 'pk', 0),
+                'is_private': safe_get(user_info, 'is_private', False),
                 'is_verified': user_info.is_verified,
                 'biography': user_info.biography,
             }
