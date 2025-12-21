@@ -1,0 +1,22 @@
+РАБОЧИЕ ДАННЫЕ ДЛЯ ТЕСТИРОВАНИЯ НА ПРОДЕ
+==========================================
+
+ПРОКСИ (работает):
+http://topfriendcorp_yandex_ru:66a204aa3a@85.31.51.47:30010
+
+АККАУНТ (работает):
+aaravinthselvam:1uZVC9wGtG3p|Instagram 385.0.0.47.74 Android (27/8.1.0; 240dpi; 1440x2924; samsung; SM-A405FN; a40; exynos7904; es_ES; 750732754)|android-45af7455cd8e83eb;f042db99-37ed-45bd-a581-b5c95bd7d578;438a3a2b-7a27-4d16-a3a8-0205f6206ed7;74115610-bcd7-4103-bce0-f03130d80761|mid=aA9rzgABAAGcfKX2jia4sC27kb9Z;ig_cb=deleted;csrftoken=HcHdd1Ql7bBoXeknZCthy6idmNw49cSG;rur="RVA\05466346554750\0541794923369:01feb81c0cfda0ce0baec8732089a0e16f1969df7b1e581fd2c3e96165a246a775c707ad";ds_user_id=66346554750;ig_did=AF7DF2BA-348F-43B7-90D0-C5C91AAFBBDE;sessionid=66346554750%3ArWDCe2HVFbkpyL%3A24%3AAYhQBgHjiN0d-sw9F2GAtow20koevG8WyTOOO_EwHQ;X-IG-WWW-Claim=hmac.AR13me2ymkGtwug60RhLYSOvBXCLa7UK42u9gDISsz8NsvFJ;Authorization=Bearer IGT:2:eyJkc191c2VyX2lkIjoiNjYzNDY1NTQ3NTAiLCJzZXNzaW9uaWQiOiI2NjM0NjU1NDc1MCUzQXJXRENlMkhWRmJrcHlMJTNBMjQlM0FBWWhRQmdIamlOMGQtc3c5RjJHQXRvdzIwa29ldkc4V3lUT09PX0V3SFEifQ==;IG-U-DS-USER-ID=66346554750;IG-INTENDED-USER-ID=66346554750;X-MID=aA9rzgABAAGcfKX2jia4sC27kb9Z;||
+
+РЕЗУЛЬТАТ ТЕСТА:
+✅ Username: aaravinthselvam
+✅ User ID: 66346554750
+✅ Full name: Aravinth selvam Aravinth.s
+✅ Is private: False
+✅ device_settings остается <class 'dict'>
+✅ НЕТ ошибки 'str' object has no attribute 'get'
+
+ИНСТРУКЦИЯ ДЛЯ ПРОДА:
+1. Добавить этот прокси в систему
+2. Импортировать эту сессию через фронтенд
+3. Проверить логи отладки
+4. Сравнить с результатом локального теста

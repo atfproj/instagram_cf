@@ -20,15 +20,11 @@ app = FastAPI(
 # В продакшене используем CORS_ORIGINS из переменных окружения
 # В разработке разрешаем все источники
 if settings.DEBUG:
-    cors_origins = ["*"]
+    cors_origins = ["http://localhost:3002", "http://127.0.0.1:3002", "http://localhost:3001", "http://127.0.0.1:3001"]
 else:
-    cors_origins_str = os.getenv("CORS_ORIGINS", "*")
-    # Если указан "*" или пусто, разрешаем все
-    if cors_origins_str == "*" or not cors_origins_str:
-        cors_origins = ["*"]
-    else:
-        # Разбиваем по запятой и очищаем от пробелов
-        cors_origins = [origin.strip() for origin in cors_origins_str.split(",") if origin.strip()]
+    cors_origins_str = os.getenv("CORS_ORIGINS", "http://localhost:3002")
+    # Разбиваем по запятой и очищаем от пробелов
+    cors_origins = [origin.strip() for origin in cors_origins_str.split(",") if origin.strip()]
 
 # Логируем настройки CORS для отладки
 import logging

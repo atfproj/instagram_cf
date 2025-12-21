@@ -20,97 +20,6 @@ from app.models.activity_log import ActivityLog, LogStatus
 logger = logging.getLogger(__name__)
 
 
-def normalize_session_data(session_data: Any) -> Dict[str, Any]:
-    """
-    Нормализует session_data из БД для использования с instagrapi.
-    Исправляет проблемы с JSON сериализацией (строки вместо словарей).
-    
-    Args:
-        session_data: Данные сессии (может быть dict, str, или None)
-        
-    Returns:
-        Нормализованный словарь для client.set_settings()
-    """
-    if not session_data:
-        return {}
-    
-    # Если это строка, пытаемся распарсить
-    if isinstance(session_data, str):
-        try:
-            session_data = json.loads(session_data)
-        except json.JSONDecodeError:
-            logger.error(f"Не удалось распарсить session_data из строки")
-            return {}
-    
-    # Если это не словарь, возвращаем пустой
-    if not isinstance(session_data, dict):
-        logger.error(f"session_data не является словарем: {type(session_data)}")
-        return {}
-    
-    # Создаём копию чтобы не изменять оригинал
-    normalized = {}
-    
-    # Копируем все поля
-    for key, value in session_data.items():
-        if key == 'device_settings':
-            # device_settings должен быть словарём
-            if isinstance(value, str):
-                try:
-                    normalized[key] = json.loads(value)
-                except json.JSONDecodeError:
-                    logger.warning(f"Не удалось распарсить device_settings из строки, создаю пустой dict")
-                    normalized[key] = {}
-            elif isinstance(value, dict):
-                normalized[key] = value.copy()
-                # Убеждаемся что android_version это int, не str
-                if 'android_version' in normalized[key]:
-                    try:
-                        normalized[key]['android_version'] = int(normalized[key]['android_version'])
-                    except (ValueError, TypeError):
-                        logger.warning(f"android_version не может быть преобразован в int: {normalized[key]['android_version']}")
-            else:
-                logger.warning(f"device_settings имеет неожиданный тип: {type(value)}, создаю пустой dict")
-                normalized[key] = {}
-        elif key == 'uuids':
-            # uuids должен быть словарём
-            if isinstance(value, str):
-                try:
-                    normalized[key] = json.loads(value)
-                except json.JSONDecodeError:
-                    normalized[key] = {}
-            elif isinstance(value, dict):
-                normalized[key] = value.copy()
-            else:
-                normalized[key] = {}
-        elif key == 'authorization_data':
-            # authorization_data должен быть словарём
-            if isinstance(value, str):
-                try:
-                    normalized[key] = json.loads(value)
-                except json.JSONDecodeError:
-                    normalized[key] = {}
-            elif isinstance(value, dict):
-                normalized[key] = value.copy()
-            else:
-                normalized[key] = {}
-        elif key == 'cookies':
-            # cookies должен быть словарём
-            if isinstance(value, str):
-                try:
-                    normalized[key] = json.loads(value)
-                except json.JSONDecodeError:
-                    normalized[key] = {}
-            elif isinstance(value, dict):
-                normalized[key] = value.copy()
-            else:
-                normalized[key] = {}
-        else:
-            # Остальные поля копируем как есть
-            normalized[key] = value
-    
-    return normalized
-
-
 class InstagramService:
     """Сервис для работы с Instagram через instagrapi"""
     
@@ -185,26 +94,17 @@ class InstagramService:
         # Загрузка сессии, если есть
         if self.account.session_data:
             try:
-                # Исправляем device_settings если это строка (проблема с JSON сериализацией)
-                session_data = self.account.session_data.copy() if isinstance(self.account.session_data, dict) else self.account.session_data
-                if isinstance(session_data, dict):
-                    if 'device_settings' in session_data and isinstance(session_data['device_settings'], str):
-                        import json
-                        try:
-                            session_data['device_settings'] = json.loads(session_data['device_settings'])
-                        except:
-                            logger.warning(f"Не удалось распарсить device_settings для {self.account.username}")
-                            session_data['device_settings'] = {}
+                # Используем session_data как есть из БД - SQLAlchemy JSON уже правильно десериализует
+                session_data = self.account.session_data
                 
                 # DEBUG: Проверяем что передаём в set_settings
-                logger.warning(f"[DEBUG] ДО set_settings - device_settings тип: {type(session_data.get('device_settings'))}")
-                logger.warning(f"[DEBUG] ДО set_settings - device_settings: {session_data.get('device_settings')}")
+                logger.warning(f"[DEBUG] session_data тип: {type(session_data)}")
+                logger.warning(f"[DEBUG] device_settings тип: {type(session_data.get('device_settings')) if isinstance(session_data, dict) else 'N/A'}")
                 
                 self.client.set_settings(session_data)
                 
                 # DEBUG: Проверяем что получилось после set_settings
-                logger.warning(f"[DEBUG] ПОСЛЕ set_settings - client.device_settings тип: {type(self.client.device_settings)}")
-                logger.warning(f"[DEBUG] ПОСЛЕ set_settings - client.device_settings: {self.client.device_settings}")
+                logger.warning(f"[DEBUG] client.device_settings тип: {type(self.client.device_settings)}")
                 
                 logger.info(f"Сессия загружена для {self.account.username} (не требуется повторный логин)")
                 # Восстанавливаем device_id из сессии, если есть

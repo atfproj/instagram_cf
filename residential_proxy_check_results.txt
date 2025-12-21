@@ -1,0 +1,32 @@
+Проверка резидентских проксей: 2025-12-19 15:09:30
+======================================================================
+
+Прокси: 148.251.43.86:5000
+  Instagram: ❌ Timeout
+  Facebook: ❌ Timeout
+  LinkedIn: ❌ Timeout
+
+Прокси: 148.113.216.26:5000
+  Instagram: ❌ Timeout
+  Facebook: ❌ Timeout
+  LinkedIn: ❌ Timeout
+
+Прокси: 15.235.35.31:5000
+  Instagram: ❌ Timeout
+  Facebook: ❌ Timeout
+  LinkedIn: ❌ Timeout
+
+Прокси: 148.113.216.37:5000
+  Instagram: ❌ Timeout
+  Facebook: ❌ Timeout
+  LinkedIn: ❌ Timeout
+
+
+ИТОГОВАЯ ТАБЛИЦА
+----------------------------------------------------------------------
+Прокси                    Instagram       Facebook        LinkedIn       
+----------------------------------------------------------------------
+148.251.43.86:5000        ❌ Timeout       ❌ Timeout       ❌ Timeout      
+148.113.216.26:5000       ❌ Timeout       ❌ Timeout       ❌ Timeout      
+15.235.35.31:5000         ❌ Timeout       ❌ Timeout       ❌ Timeout      
+148.113.216.37:5000       ❌ Timeout       ❌ Timeout       ❌ Timeout      

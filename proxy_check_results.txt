@@ -1,0 +1,96 @@
+Результаты проверки прокси - Thu Dec 18 11:26:10 AM MSK 2025
+========================================
+
+Прокси #1: http://topfriendcorp_yandex_ru:66a204aa3a@85.31.51.47:30010...
+  IP: 85.31.51.47
+  Google: ✅ (200)
+  Telegram: ✅ (200)
+  Instagram: ❌
+
+Прокси #2: http://topfriendcorp_yandex_ru:66a204aa3a@45.134.31.201:3001...
+  IP: 45.134.31.201
+  Google: ✅ (200)
+  Telegram: ✅ (200)
+  Instagram: ❌
+
+Прокси #3: http://topfriendcorp_yandex_ru:66a204aa3a@176.53.166.31:3001...
+  IP: 176.53.166.31
+  Google: ✅ (200)
+  Telegram: ✅ (200)
+  Instagram: ❌
+
+Прокси #4: http://topfriendcorp_yandex_ru:66a204aa3a@84.54.8.184:30010...
+  IP: 84.54.8.184
+  Google: ✅ (200)
+  Telegram: ✅ (200)
+  Instagram: ❌
+
+Прокси #5: http://topfriendcorp_yandex_ru:66a204aa3a@185.64.251.84:3001...
+  IP: 185.64.251.84
+  Google: ✅ (200)
+  Telegram: ✅ (200)
+  Instagram: ❌
+
+Прокси #6: http://topfriendcorp_yandex_ru:66a204aa3a@45.90.199.104:3001...
+  IP: 45.90.199.104
+  Google: ✅ (200)
+  Telegram: ✅ (200)
+  Instagram: ❌
+
+Прокси #7: http://topfriendcorp_yandex_ru:66a204aa3a@45.91.10.208:30010...
+  IP: 45.91.10.208
+  Google: ✅ (200)
+  Telegram: ✅ (200)
+  Instagram: ❌
+
+Прокси #8: http://topfriendcorp_yandex_ru:66a204aa3a@5.182.119.188:3001...
+  IP: 5.182.119.188
+  Google: ✅ (200)
+  Telegram: ✅ (200)
+  Instagram: ❌
+
+Прокси #9: http://topfriendcorp_yandex_ru:66a204aa3a@2.56.114.31:30010...
+  IP: 2.56.114.31
+  Google: ✅ (200)
+  Telegram: ✅ (200)
+  Instagram: ❌
+
+Прокси #10: http://topfriendcorp_yandex_ru:66a204aa3a@37.16.79.237:30010...
+  IP: 37.16.79.237
+  Google: ✅ (200)
+  Telegram: ✅ (200)
+  Instagram: ❌
+
+Прокси #11: http://topfriendcorp_yandex_ru:66a204aa3a@5.172.181.235:3001...
+  IP: 5.172.181.235
+  Google: ✅ (200)
+  Telegram: ✅ (200)
+  Instagram: ❌
+
+Прокси #12: http://topfriendcorp_yandex_ru:66a204aa3a@37.77.146.158:3001...
+  IP: 37.77.146.158
+  Google: ✅ (200)
+  Telegram: ✅ (200)
+  Instagram: ❌
+
+Прокси #13: http://topfriendcorp_yandex_ru:66a204aa3a@193.142.242.145:30...
+  IP: N/A
+  Google: ✅ (200)
+  Telegram: ✅ (200)
+  Instagram: ❌
+
+Прокси #14: http://topfriendcorp_yandex_ru:66a204aa3a@193.192.1.184:3001...
+  IP: 193.192.1.184
+  Google: ✅ (200)
+  Telegram: ✅ (200)
+  Instagram: ❌
+
+Прокси #15: http://topfriendcorp_yandex_ru:66a204aa3a@193.142.249.205:30...
+  IP: 193.142.249.205
+  Google: ✅ (200)
+  Telegram: ✅ (200)
+  Instagram: ❌
+
+
+========================================
+Проверка завершена: Thu Dec 18 11:29:56 AM MSK 2025

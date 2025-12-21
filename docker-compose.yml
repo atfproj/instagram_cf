@@ -44,7 +44,7 @@ services:
       - CELERY_RESULT_BACKEND=redis://redis:6379/0
     working_dir: /app
     ports:
-      - "8009:8000"
+      - "127.0.0.1:8009:8000"
     env_file:
       - .env
     depends_on:
@@ -83,9 +83,9 @@ services:
       - ./frontend:/app
       - /app/node_modules
     ports:
-      - "3001:3001"
+      - "127.0.0.1:3001:3001"
     environment:
-      - VITE_API_URL=http://localhost:8009
+      - VITE_API_URL=
       - VITE_API_TARGET=http://app:8000
     depends_on:
       - app
