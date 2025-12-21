@@ -57,7 +57,7 @@ export default function Groups() {
       </div>
 
       <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
-        {groups?.map((group) => (
+        {Array.isArray(groups) && groups.map((group) => (
           <div key={group.id} className="card">
             <div className="flex items-start justify-between">
               <div className="flex-1">
