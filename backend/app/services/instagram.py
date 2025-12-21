@@ -722,6 +722,10 @@ class InstagramService:
         start_time = datetime.utcnow()
         
         try:
+            # DEBUG: Проверяем device_settings перед вызовом account_info
+            logger.warning(f"[DEBUG] В get_profile - client.device_settings тип: {type(self.client.device_settings)}")
+            logger.warning(f"[DEBUG] В get_profile - client.device_settings: {self.client.device_settings}")
+            
             # Получаем информацию о текущем аккаунте
             account_info = self.client.account_info()
             
