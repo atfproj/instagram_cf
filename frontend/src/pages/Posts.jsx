@@ -154,7 +154,7 @@ function PostDetailsModal({ post, groups, onClose }) {
           <label className="block text-sm font-medium text-gray-700 mb-1">Группы</label>
           <div className="flex flex-wrap gap-2">
             {post.target_groups?.map((groupId) => {
-              const group = groups.find(g => g.id === groupId)
+              const group = Array.isArray(groups) ? groups.find(g => g.id === groupId) : null
               return group ? (
                 <span key={groupId} className="badge badge-info">{group.name}</span>
               ) : null

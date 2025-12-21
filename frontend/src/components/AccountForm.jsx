@@ -126,7 +126,7 @@ export default function AccountForm({ account, groups, onSuccess }) {
           className="input"
         >
           <option value="">Без группы</option>
-          {groups.map((group) => (
+          {Array.isArray(groups) && groups.map((group) => (
             <option key={group.id} value={group.id}>
               {group.name}
             </option>

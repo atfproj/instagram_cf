@@ -142,7 +142,7 @@ export default function PostForm({ groups, onSuccess }) {
           Группы для публикации *
         </label>
         <div className="space-y-2 max-h-40 overflow-y-auto border border-gray-200 rounded-lg p-3">
-          {groups.length === 0 ? (
+          {!Array.isArray(groups) || groups.length === 0 ? (
             <p className="text-sm text-gray-500">Нет доступных групп</p>
           ) : (
             groups.map((group) => (
