@@ -2,13 +2,15 @@ import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from 'react-query'
 import { accountsApi } from '../api/accounts'
 import { groupsApi } from '../api/groups'
-import { Plus, Edit, Trash2, LogIn, RefreshCw, CheckCircle, XCircle, Clock, User } from 'lucide-react'
+import { Plus, Edit, Trash2, LogIn, RefreshCw, CheckCircle, XCircle, Clock, User, Upload } from 'lucide-react'
 import Modal from '../components/Modal'
 import AccountForm from '../components/AccountForm'
 import ProfileModal from '../components/ProfileModal'
+import ImportSessionModal from '../components/ImportSessionModal'
 
 export default function Accounts() {
   const [isModalOpen, setIsModalOpen] = useState(false)
+  const [isImportModalOpen, setIsImportModalOpen] = useState(false)
   const [editingAccount, setEditingAccount] = useState(null)
   const [profileAccount, setProfileAccount] = useState(null)
   const queryClient = useQueryClient()
@@ -78,10 +80,19 @@ export default function Accounts() {
           <h1 className="text-3xl font-bold text-gray-900">Аккаунты</h1>
           <p className="mt-2 text-gray-600">Управление Instagram аккаунтами</p>
         </div>
-        <button onClick={handleAdd} className="btn btn-primary flex items-center gap-2">
-          <Plus className="h-5 w-5" />
-          Добавить аккаунт
-        </button>
+        <div className="flex gap-2">
+          <button 
+            onClick={() => setIsImportModalOpen(true)} 
+            className="btn bg-green-600 hover:bg-green-700 text-white flex items-center gap-2"
+          >
+            <Upload className="h-5 w-5" />
+            Загрузка сессии
+          </button>
+          <button onClick={handleAdd} className="btn btn-primary flex items-center gap-2">
+            <Plus className="h-5 w-5" />
+            Добавить аккаунт
+          </button>
+        </div>
       </div>
 
       <div className="card">
@@ -143,7 +154,7 @@ export default function Accounts() {
                         <button
                           onClick={() => loginMutation.mutate(account.id)}
                           className="text-primary-600 hover:text-primary-900"
-                          title="Авторизоваться"
+                          title="Авторизация по логин/пароль"
                         >
                           <LogIn className="h-4 w-4" />
                         </button>
@@ -195,6 +206,15 @@ export default function Accounts() {
           onClose={() => setProfileAccount(null)}
         />
       )}
+
+      <ImportSessionModal
+        isOpen={isImportModalOpen}
+        onClose={() => setIsImportModalOpen(false)}
+        onSuccess={(response) => {
+          alert(`Аккаунт '${response.account.username}' успешно импортирован!`)
+          queryClient.invalidateQueries('accounts')
+        }}
+      />
     </div>
   )
 }

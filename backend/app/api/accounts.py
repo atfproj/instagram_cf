@@ -2,16 +2,45 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from typing import List, Optional
 from uuid import UUID
-from pydantic import BaseModel
+from datetime import datetime
+from pydantic import BaseModel, Field
+import logging
 from app.core.database import get_db
 from app.core.security import encrypt_data, decrypt_data
 from app.models.account import Account, AccountStatus
 from app.models.group import Group
 from app.models.user import User
+from app.models.activity_log import ActivityLog, LogStatus
 from app.schemas.account import AccountCreate, AccountUpdate, AccountResponse
 from app.api.auth import get_current_user
 
+logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/accounts", tags=["accounts"])
+
+
+# Функция для логирования
+def log_activity(db: Session, action: str, status: LogStatus, account_id: UUID = None, details: dict = None):
+    """Логирование действий"""
+    try:
+        log = ActivityLog(
+            action=action,
+            status=status,
+            account_id=account_id,
+            details=details
+        )
+        db.add(log)
+        db.commit()
+    except Exception as e:
+        logger.error(f"Ошибка логирования: {e}")
+        db.rollback()
+
+
+# Schema для импорта сессии из текста
+class SessionImportRequest(BaseModel):
+    session_text: str = Field(..., description="Строка с данными аккаунта в формате username:password|UA|device_ids|cookies||email")
+    proxy_id: Optional[UUID] = Field(None, description="ID прокси для привязки")
+    group_id: Optional[UUID] = Field(None, description="ID группы для привязки")
+    validate_session: bool = Field(False, description="Валидировать сессию после импорта")
 
 
 @router.post("/", response_model=AccountResponse, status_code=status.HTTP_201_CREATED)
@@ -266,7 +295,7 @@ def login_account(account_id: UUID, db: Session = Depends(get_db), current_user:
     # Пытаемся авторизоваться
     result = instagram_service.login()
     
-    # Логируем результат авторизации для отладки
+        # Логируем результат авторизации для отладки
     import logging
     logger = logging.getLogger(__name__)
     logger.info(f"Результат авторизации для аккаунта {db_account.username}: success={result.get('success')}, message={result.get('message')}")
@@ -600,5 +629,361 @@ def toggle_profile_privacy(
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=result.get("message", "Ошибка изменения приватности")
+        )
+
+
+class SessionImport(BaseModel):
+    session_data: dict
+    device_id: Optional[str] = None
+    user_agent: Optional[str] = None
+
+
+@router.post("/{account_id}/import-session")
+def import_session(
+    account_id: UUID,
+    session_import: SessionImport,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Импортировать сессию из браузера для аккаунта
+    
+    Использование:
+    1. Авторизуйтесь в браузере через прокси
+    2. Экспортируйте session_data (cookies, session)
+    3. Импортируйте через этот endpoint
+    4. Аккаунт станет ACTIVE без повторной авторизации
+    """
+    from app.services.instagram import InstagramService
+    from app.utils.logging import log_activity
+    from app.models.activity_log import LogStatus
+    from datetime import datetime
+    
+    db_account = db.query(Account).filter(Account.id == account_id).first()
+    if not db_account:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Аккаунт не найден"
+        )
+    
+    try:
+        # Проверяем сессию через instagrapi
+        instagram_service = InstagramService(db_account)
+        instagram_service.client.set_settings(session_import.session_data)
+        
+        # Проверяем, что сессия работает
+        try:
+            account_info = instagram_service.client.account_info()
+            logger.info(f"Сессия валидна для {db_account.username}")
+        except Exception as e:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Сессия невалидна: {str(e)}"
+            )
+        
+        # Сохраняем сессию
+        db_account.session_data = session_import.session_data
+        db_account.device_id = session_import.device_id
+        db_account.user_agent = session_import.user_agent
+        db_account.status = AccountStatus.ACTIVE
+        db_account.last_login_at = datetime.utcnow()
+        db_account.failed_attempts = 0
+        db.commit()
+        db.refresh(db_account)
+        
+        # Логируем
+        log_activity(
+            db=db,
+            action="import_session",
+            status=LogStatus.SUCCESS,
+            account_id=account_id,
+            details={"message": "Сессия успешно импортирована из браузера"}
+        )
+        
+        return {
+            "success": True,
+            "message": "Сессия успешно импортирована",
+            "account": AccountResponse.from_orm(db_account)
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Ошибка импорта сессии для {db_account.username}: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Ошибка импорта сессии: {str(e)}"
+        )
+
+
+class BulkImportRequest(BaseModel):
+    accounts_data: List[str]  # Список строк в формате InstAccountsManager
+    group_id: Optional[UUID] = None
+    proxy_id: Optional[UUID] = None
+    language: str = "en"
+    validate_sessions: bool = False  # Валидировать сессии при импорте (может не работать без прокси)
+
+
+@router.post("/bulk-import")
+def bulk_import_accounts(
+    import_request: BulkImportRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Массовый импорт аккаунтов из формата InstAccountsManager
+    
+    Формат строки:
+    username:password|User-Agent|device_id;phone_id;uuid;adid|cookies||email:password
+    
+    Использование:
+    1. Загрузите файл с аккаунтами
+    2. Отправьте POST запрос с accounts_data (список строк)
+    3. Аккаунты будут созданы и активированы автоматически
+    """
+    from app.services.account_importer import parse_account_line, create_session_data_from_import, validate_imported_session
+    from app.services.instagram import InstagramService
+    from app.utils.logging import log_activity
+    from app.models.activity_log import LogStatus
+    from app.models.proxy import Proxy
+    from datetime import datetime
+    from sqlalchemy.orm import joinedload
+    
+    results = {
+        'success': [],
+        'failed': [],
+        'total': len(import_request.accounts_data)
+    }
+    
+    # Получаем прокси, если указан
+    proxy_url = None
+    if import_request.proxy_id:
+        proxy = db.query(Proxy).filter(Proxy.id == import_request.proxy_id).first()
+        if proxy:
+            proxy_url = proxy.url
+        else:
+            logger.warning(f"Прокси {import_request.proxy_id} не найден")
+    
+    for line in import_request.accounts_data:
+        try:
+            # Парсим строку
+            account_data = parse_account_line(line)
+            if not account_data:
+                results['failed'].append({
+                    'line': line[:50],
+                    'error': 'Неверный формат строки'
+                })
+                continue
+            
+            username = account_data['username']
+            
+            # Проверяем, существует ли аккаунт
+            existing = db.query(Account).filter(Account.username == username).first()
+            if existing:
+                results['failed'].append({
+                    'username': username,
+                    'error': 'Аккаунт уже существует'
+                })
+                continue
+            
+            # Валидируем сессию (опционально)
+            session_data = None
+            if import_request.validate_sessions:
+                validation = validate_imported_session(account_data, proxy_url)
+                if not validation['success']:
+                    results['failed'].append({
+                        'username': username,
+                        'error': validation['message']
+                    })
+                    continue
+                session_data = validation['session_data']
+            else:
+                # Создаем session_data без валидации
+                from app.services.account_importer import create_session_data_from_import
+                session_data = create_session_data_from_import(account_data)
+            
+            # Создаем аккаунт
+            encrypted_password = encrypt_data(account_data['password'])
+            
+            new_account = Account(
+                username=username,
+                password=encrypted_password,
+                language=import_request.language,
+                group_id=import_request.group_id,
+                proxy_id=import_request.proxy_id,
+                session_data=session_data,
+                device_id=account_data['device_id'],
+                user_agent=account_data['user_agent'],
+                status=AccountStatus.ACTIVE,
+                last_login_at=datetime.utcnow()
+            )
+            
+            if import_request.proxy_id and proxy:
+                new_account.proxy_url = proxy.url
+            
+            db.add(new_account)
+            db.commit()
+            db.refresh(new_account)
+            
+            # Логируем
+            log_activity(
+                db=db,
+                action="bulk_import",
+                status=LogStatus.SUCCESS,
+                account_id=new_account.id,
+                details={"message": f"Аккаунт импортирован из файла"}
+            )
+            
+            results['success'].append({
+                'username': username,
+                'id': str(new_account.id)
+            })
+            
+        except Exception as e:
+            logger.error(f"Ошибка импорта строки {line[:50]}...: {e}", exc_info=True)
+            results['failed'].append({
+                'line': line[:50],
+                'error': str(e)
+            })
+    
+    # Обновляем счетчик в группе
+    if import_request.group_id:
+        group = db.query(Group).filter(Group.id == import_request.group_id).first()
+        if group:
+            group.accounts_count = len(group.accounts)
+            db.commit()
+    
+    return {
+        'success': True,
+        'imported': len(results['success']),
+        'failed': len(results['failed']),
+        'total': results['total'],
+        'results': results
+    }
+
+
+@router.post("/import-session-from-text")
+def import_session_from_text(
+    import_request: SessionImportRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Импорт аккаунта из текста с готовой сессией
+    Формат: username:password|User-Agent|device_ids|cookies||email
+    
+    Обходит проверки Instagram, т.к. использует готовую сессию вместо логина
+    """
+    from app.services.session_importer import parse_session_line, create_instagrapi_session, validate_session
+    from app.models.proxy import Proxy
+    
+    try:
+        # 1. Парсим строку
+        account_data = parse_session_line(import_request.session_text)
+        if not account_data:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Не удалось распарсить строку. Проверьте формат данных."
+            )
+        
+        logger.info(f"Импорт аккаунта: {account_data['username']}")
+        
+        # 2. Проверяем, не существует ли уже такой аккаунт
+        existing = db.query(Account).filter(Account.username == account_data['username']).first()
+        if existing:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Аккаунт '{account_data['username']}' уже существует"
+            )
+        
+        # 3. Проверяем группу
+        if import_request.group_id:
+            group = db.query(Group).filter(Group.id == import_request.group_id).first()
+            if not group:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="Группа не найдена"
+                )
+        
+        # 4. Проверяем прокси
+        proxy = None
+        proxy_url = None
+        if import_request.proxy_id:
+            proxy = db.query(Proxy).filter(Proxy.id == import_request.proxy_id).first()
+            if not proxy:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="Прокси не найден"
+                )
+            proxy_url = proxy.url
+        
+        # 5. Создаем session_data для instagrapi
+        session_data = create_instagrapi_session(account_data)
+        
+        # 6. Валидируем сессию (опционально)
+        validation_result = None
+        if import_request.validate_session:
+            logger.info(f"Валидация сессии для {account_data['username']}...")
+            validation_result = validate_session(session_data, proxy_url)
+            
+            if not validation_result['success']:
+                logger.warning(f"Сессия не валидна: {validation_result['message']}")
+                # Не прерываем импорт, просто предупреждаем
+        
+        # 7. Создаем аккаунт в БД
+        new_account = Account(
+            username=account_data['username'],
+            password=encrypt_data(account_data['password']),  # Шифруем пароль
+            email=account_data.get('email'),
+            group_id=import_request.group_id,
+            proxy_id=import_request.proxy_id,
+            proxy_url=proxy_url,
+            status=AccountStatus.ACTIVE,
+            session_data=session_data,  # Сохраняем готовую сессию
+            device_id=account_data['device_id'],
+            last_login_at=datetime.utcnow()  # Сессия уже авторизована
+        )
+        
+        db.add(new_account)
+        db.commit()
+        db.refresh(new_account)
+        
+        # Обновляем счетчик в группе
+        if import_request.group_id:
+            group = db.query(Group).filter(Group.id == import_request.group_id).first()
+            if group:
+                group.accounts_count = len(group.accounts)
+                db.commit()
+        
+        # Логируем
+        log_activity(
+            db=db,
+            action="import_session",
+            status=LogStatus.SUCCESS,
+            account_id=new_account.id,
+            details={
+                "message": f"Аккаунт импортирован из текста с готовой сессией",
+                "username": account_data['username'],
+                "validated": import_request.validate_session,
+                "validation_result": validation_result['message'] if validation_result else None
+            }
+        )
+        
+        logger.info(f"✅ Аккаунт {account_data['username']} успешно импортирован")
+        
+        return {
+            'success': True,
+            'message': f"Аккаунт '{account_data['username']}' успешно импортирован с готовой сессией",
+            'account': AccountResponse.from_orm(new_account).dict(),
+            'validation': validation_result if validation_result else {'success': None, 'message': 'Не валидировано'}
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Ошибка импорта сессии из текста: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Ошибка импорта: {str(e)}"
         )
 

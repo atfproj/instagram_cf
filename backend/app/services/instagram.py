@@ -25,7 +25,10 @@ class InstagramService:
     
     def __init__(self, account: Account):
         self.account = account
+        # ВАЖНО: Создаем клиент БЕЗ запросов к Instagram
+        # Client() не делает запросов при инициализации, только создает объект
         self.client = Client()
+        logger.debug(f"Создан Client() для {account.username}, прокси еще не установлен")
         self._setup_client()
     
     def _setup_client(self):
@@ -34,25 +37,59 @@ class InstagramService:
         proxy_url = None
         
         # Сначала пытаемся получить прокси через proxy_id (новый способ)
-        if self.account.proxy_id and self.account.proxy:
-            proxy_url = self.account.proxy.url
+        proxy_url = None
+        logger.warning(f"[PROXY DEBUG] Проверка прокси для {self.account.username}: proxy_id={self.account.proxy_id}, proxy_url={self.account.proxy_url}")
+        if self.account.proxy_id:
+            if self.account.proxy:
+                proxy_url = self.account.proxy.url
+                logger.warning(f"[PROXY DEBUG] Прокси найден через relationship: {proxy_url[:50]}...")
+            else:
+                logger.warning(f"[PROXY DEBUG] proxy_id={self.account.proxy_id} указан, но self.account.proxy=None! Relationship не загружен!")
         # Если нет proxy_id, используем старый способ через proxy_url
-        elif self.account.proxy_url:
+        if not proxy_url and self.account.proxy_url:
             proxy_url = self.account.proxy_url
+            logger.warning(f"[PROXY DEBUG] Прокси найден через proxy_url: {proxy_url[:50]}...")
         
         if proxy_url:
             try:
                 # instagrapi принимает прокси как строку в формате http://user:pass@host:port
                 # Убеждаемся, что формат правильный
+                original_proxy_url = proxy_url
                 if not proxy_url.startswith(('http://', 'https://', 'socks5://')):
                     # Если нет протокола, добавляем http://
                     proxy_url = f"http://{proxy_url}"
                 
+                logger.warning(f"[PROXY DEBUG] Устанавливаем прокси для {self.account.username}: {proxy_url[:60]}...")
+                
+                # ВАЖНО: Устанавливаем прокси ДО любых других операций
+                # instagrapi использует requests под капотом, нужно установить прокси правильно
+                # Упрощаем: используем только стандартный метод set_proxy (как работало раньше)
                 self.client.set_proxy(proxy_url)
-                logger.info(f"Прокси установлен для {self.account.username}: {proxy_url[:50]}...")
+                logger.warning(f"[PROXY DEBUG] Прокси установлен через set_proxy() для {self.account.username}")
+                
+                # Проверяем, что прокси действительно установлен
+                current_proxy = None
+                # Проверяем разные возможные атрибуты
+                for attr in ['_proxy', 'proxy', 'proxies', '_proxies']:
+                    if hasattr(self.client, attr):
+                        value = getattr(self.client, attr)
+                        if value:
+                            current_proxy = value
+                            logger.warning(f"[PROXY DEBUG] Прокси найден в client.{attr}: {str(value)[:60]}")
+                            break
+                
+                if not current_proxy:
+                    logger.error(f"КРИТИЧНО: Прокси не установлен в клиенте для {self.account.username}!")
+                    logger.error(f"Проверенные атрибуты: {[attr for attr in ['_proxy', 'proxy', 'proxies', '_proxies'] if hasattr(self.client, attr)]}")
+                    # Не прерываем выполнение, но логируем критическую ошибку
+                else:
+                    logger.info(f"Прокси подтвержден в клиенте для {self.account.username}")
             except Exception as e:
-                logger.error(f"Не удалось установить прокси для {self.account.username}: {e}", exc_info=True)
-                # Не прерываем выполнение, но логируем ошибку
+                logger.error(f"КРИТИЧНО: Не удалось установить прокси для {self.account.username}: {e}", exc_info=True)
+                # Если прокси обязателен, не продолжаем работу
+                raise Exception(f"Не удалось установить прокси: {str(e)}")
+        else:
+            logger.warning(f"Прокси не указан для {self.account.username} - запросы будут идти с реального IP!")
         
         # Загрузка сессии, если есть
         if self.account.session_data:
@@ -96,15 +133,61 @@ class InstagramService:
             
             logger.info(f"Попытка авторизации {self.account.username} ({proxy_info})")
             
-            # Проверяем, что прокси действительно установлен
-            try:
-                current_proxy = getattr(self.client, '_proxy', None) or getattr(self.client, 'proxy', None)
-                if current_proxy:
-                    logger.info(f"Прокси в клиенте: {current_proxy}")
-                else:
-                    logger.warning(f"Прокси не найден в клиенте, хотя должен быть установлен")
-            except Exception as e:
-                logger.warning(f"Не удалось проверить прокси в клиенте: {e}")
+            # КРИТИЧНО: Проверяем, что прокси действительно установлен ПЕРЕД авторизацией
+            current_proxy = None
+            proxy_attr = None
+            # Проверяем все возможные атрибуты прокси
+            for attr in ['_proxy', 'proxy', 'proxies', '_proxies']:
+                if hasattr(self.client, attr):
+                    value = getattr(self.client, attr)
+                    if value:
+                        current_proxy = value
+                        proxy_attr = attr
+                        break
+            
+            if not current_proxy:
+                error_msg = f"КРИТИЧНО: Прокси не установлен в клиенте для {self.account.username} перед авторизацией! Запрос пойдет с реального IP!"
+                logger.error(error_msg)
+                # Проверяем, может быть прокси установлен в requests session
+                if hasattr(self.client, 'private') and hasattr(self.client.private, 'session'):
+                    session = self.client.private.session
+                    if hasattr(session, 'proxies') and session.proxies:
+                        logger.info(f"Прокси найден в session.proxies: {session.proxies}")
+                        current_proxy = session.proxies
+                    elif hasattr(session, '_proxies') and session._proxies:
+                        logger.info(f"Прокси найден в session._proxies: {session._proxies}")
+                        current_proxy = session._proxies
+                
+                if not current_proxy:
+                    return {
+                        "success": False,
+                        "message": f"Ошибка: прокси не установлен. {error_msg}",
+                        "proxy_error": True
+                    }
+            else:
+                logger.info(f"Прокси подтвержден перед авторизацией для {self.account.username} в {proxy_attr}: {str(current_proxy)[:100]}")
+            
+            # Дополнительная проверка: смотрим, что использует requests под капотом
+            if hasattr(self.client, 'private') and hasattr(self.client.private, 'session'):
+                session = self.client.private.session
+                if hasattr(session, 'proxies'):
+                    logger.info(f"Прокси в requests session: {session.proxies}")
+                if hasattr(session, 'trust_env'):
+                    logger.info(f"trust_env в session: {session.trust_env}")
+            
+            # КРИТИЧНО: Проверяем прокси ПЕРЕД каждым запросом
+            # instagrapi может создавать новую сессию при login(), нужно убедиться, что прокси установлен
+            if hasattr(self.client, 'private') and hasattr(self.client.private, 'session'):
+                session = self.client.private.session
+                if hasattr(session, 'proxies') and not session.proxies:
+                    # Если прокси не установлен в session, устанавливаем его
+                    logger.warning(f"[PROXY DEBUG] Прокси не найден в session.proxies перед login, устанавливаем...")
+                    if current_proxy:
+                        if isinstance(current_proxy, str):
+                            session.proxies = {'http': current_proxy, 'https': current_proxy}
+                        else:
+                            session.proxies = current_proxy
+                        logger.warning(f"[PROXY DEBUG] Прокси установлен в session.proxies: {session.proxies}")
             
             # Небольшая задержка перед авторизацией (помогает избежать проблем с Instagram)
             import time
@@ -152,11 +235,52 @@ class InstagramService:
             }
             
         except BadPassword as e:
-            logger.error(f"BadPassword для {self.account.username}: {str(e)}")
+            # Логируем полное сообщение от Instagram
+            error_message = str(e)
+            logger.error(f"BadPassword для {self.account.username}: {error_message}")
+            
+            # Пытаемся получить дополнительную информацию об ошибке
+            error_details = {
+                "error_type": "BadPassword",
+                "message": error_message,
+                "full_repr": repr(error_message)
+            }
+            
+            # Проверяем, есть ли у исключения дополнительные атрибуты
+            if hasattr(e, 'response'):
+                try:
+                    response = e.response
+                    if hasattr(response, 'status_code'):
+                        error_details["http_status"] = response.status_code
+                        logger.error(f"[ERROR DETAILS] HTTP Status: {response.status_code}")
+                    if hasattr(response, 'headers'):
+                        error_details["response_headers"] = dict(response.headers)
+                        logger.error(f"[ERROR DETAILS] Response Headers: {dict(response.headers)}")
+                    if hasattr(response, 'text'):
+                        error_details["response_body"] = response.text[:500]  # Первые 500 символов
+                        logger.error(f"[ERROR DETAILS] Response Body: {response.text[:500]}")
+                except:
+                    pass
+            
+            # Проверяем, есть ли информация о черном списке IP
+            if "blacklist" in error_message.lower() or "change your ip" in error_message.lower():
+                logger.error(f"[PROXY DEBUG] Instagram сообщает, что IP в черном списке!")
+                logger.error(f"[PROXY DEBUG] Полное сообщение от Instagram: {error_message}")
+                logger.error(f"[PROXY DEBUG] Детали ошибки: {json.dumps(error_details, indent=2, default=str)}")
+                return {
+                    "success": False,
+                    "message": f"Instagram сообщает, что IP адрес прокси в черном списке: {error_message}",
+                    "error_type": "BadPassword",
+                    "ip_blacklisted": True,
+                    "error_details": error_details
+                }
+            
+            logger.error(f"[ERROR DETAILS] Полная информация об ошибке: {json.dumps(error_details, indent=2, default=str)}")
             return {
                 "success": False,
-                "message": "Неверный пароль",
-                "error_type": "BadPassword"
+                "message": f"Неверный пароль. Сообщение от Instagram: {error_message}",
+                "error_type": "BadPassword",
+                "error_details": error_details
             }
             
         except (UserError, UserNotFound):
@@ -186,6 +310,31 @@ class InstagramService:
             logger.error(f"Ошибка при авторизации {self.account.username}: {error_type}: {str(e)}")
             logger.error(f"Traceback: {traceback.format_exc()}")
             
+            # Пытаемся получить дополнительную информацию об ошибке
+            error_details = {
+                "error_type": error_type,
+                "message": str(e),
+                "full_repr": repr(str(e))
+            }
+            
+            # Проверяем, есть ли у исключения дополнительные атрибуты
+            if hasattr(e, 'response'):
+                try:
+                    response = e.response
+                    if hasattr(response, 'status_code'):
+                        error_details["http_status"] = response.status_code
+                        logger.error(f"[ERROR DETAILS] HTTP Status: {response.status_code}")
+                    if hasattr(response, 'headers'):
+                        error_details["response_headers"] = dict(response.headers)
+                        logger.error(f"[ERROR DETAILS] Response Headers: {dict(response.headers)}")
+                    if hasattr(response, 'text'):
+                        error_details["response_body"] = response.text[:500]  # Первые 500 символов
+                        logger.error(f"[ERROR DETAILS] Response Body: {response.text[:500]}")
+                except:
+                    pass
+            
+            logger.error(f"[ERROR DETAILS] Полная информация об ошибке: {json.dumps(error_details, indent=2, default=str)}")
+            
             # Проверяем, используется ли прокси
             try:
                 proxy_used = getattr(self.client, '_proxy', None) or getattr(self.client, 'proxy', None)
@@ -197,7 +346,15 @@ class InstagramService:
                 pass
             
             # Проверяем, не связана ли ошибка с прокси
-            if "proxy" in error_str or "tunnel" in error_str or "403" in error_str or "connection" in error_str:
+            if "proxy" in error_str or "tunnel" in error_str or "403" in error_str or "connection" in error_str or "502" in error_str or "bad gateway" in error_str:
+                # Детальная диагностика для 502 Bad Gateway
+                if "502" in error_str or "bad gateway" in error_str:
+                    logger.error(f"[PROXY DEBUG] 502 Bad Gateway для {self.account.username}")
+                    proxy_url = self.account.proxy.url if self.account.proxy else self.account.proxy_url
+                    logger.error(f"[PROXY DEBUG] Прокси: {proxy_url[:60] if proxy_url else 'None'}...")
+                    logger.error(f"[PROXY DEBUG] Это означает, что прокси не может подключиться к Instagram")
+                    logger.error(f"[PROXY DEBUG] Возможные причины: Instagram блокирует этот прокси, прокси перегружен, или прокси неправильно настроен")
+                
                 return {
                     "success": False,
                     "message": f"Ошибка прокси: {str(e)}. Проверьте настройки прокси или попробуйте другой прокси.",
