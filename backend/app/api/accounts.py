@@ -922,13 +922,24 @@ def import_session_from_text(
         
         # 6. Валидируем сессию (опционально)
         validation_result = None
+        account_status = AccountStatus.ACTIVE  # По умолчанию активный
+        last_login_at = datetime.utcnow()  # По умолчанию считаем что сессия авторизована
+        
         if import_request.validate_session:
             logger.info(f"Валидация сессии для {account_data['username']}...")
             validation_result = validate_session(session_data, proxy_url)
             
             if not validation_result['success']:
                 logger.warning(f"Сессия не валидна: {validation_result['message']}")
-                # Не прерываем импорт, просто предупреждаем
+                # Если валидация провалилась - статус LOGIN_REQUIRED
+                account_status = AccountStatus.LOGIN_REQUIRED
+                last_login_at = None
+                
+                # Возвращаем ошибку 400 вместо 200
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Сессия невалидна: {validation_result['message']}"
+                )
         
         # 7. Создаем аккаунт в БД
         new_account = Account(
@@ -938,10 +949,10 @@ def import_session_from_text(
             group_id=import_request.group_id,
             proxy_id=import_request.proxy_id,
             proxy_url=proxy_url,
-            status=AccountStatus.ACTIVE,
+            status=account_status,  # Зависит от результата валидации
             session_data=session_data,  # Сохраняем готовую сессию
             device_id=account_data['device_id'],
-            last_login_at=datetime.utcnow()  # Сессия уже авторизована
+            last_login_at=last_login_at  # None если валидация провалилась
         )
         
         db.add(new_account)
