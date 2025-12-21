@@ -22,7 +22,7 @@ app = FastAPI(
 if settings.DEBUG:
     cors_origins = ["http://localhost:3002", "http://127.0.0.1:3002", "http://localhost:3001", "http://127.0.0.1:3001"]
 else:
-    cors_origins_str = os.getenv("CORS_ORIGINS", "http://localhost:3002")
+    cors_origins_str = os.getenv("CORS_ORIGINS", "http://144.76.59.27:3001")
     # Разбиваем по запятой и очищаем от пробелов
     cors_origins = [origin.strip() for origin in cors_origins_str.split(",") if origin.strip()]
 
