@@ -107,10 +107,10 @@ class InstagramService:
                 logger.warning(f"[DEBUG] client.device_settings тип: {type(self.client.device_settings)}")
                 
                 logger.info(f"Сессия загружена для {self.account.username} (не требуется повторный логин)")
-                # Восстанавливаем device_id из сессии, если есть
-                if self.account.device_id:
-                    self.client.set_device(self.account.device_id)
-                    logger.debug(f"Device ID восстановлен для {self.account.username}")
+                # Device ID уже в session_data, не нужно восстанавливать отдельно
+                # if self.account.device_id:
+                #     self.client.set_device(self.account.device_id)
+                #     logger.debug(f"Device ID восстановлен для {self.account.username}")
             except Exception as e:
                 logger.warning(f"Не удалось загрузить сессию для {self.account.username}: {e}. Потребуется повторный логин.")
         else:
