@@ -21,6 +21,7 @@ class Account(Base):
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     username = Column(String(100), unique=True, nullable=False, index=True)
     password = Column(String(500), nullable=False)  # encrypted
+    email = Column(String(255), nullable=True)  # Email для восстановления аккаунта (опционально)
     session_data = Column(JSON, nullable=True)
     group_id = Column(UUID(as_uuid=True), ForeignKey("groups.id"), nullable=True)
     language = Column(String(10), nullable=False, default="en")
