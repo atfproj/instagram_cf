@@ -934,7 +934,7 @@ def import_session_from_text(
         new_account = Account(
             username=account_data['username'],
             password=encrypt_data(account_data['password']),  # Шифруем пароль
-            email=account_data.get('email'),
+            email=account_data.get('email'),  # Email для восстановления (опционально)
             group_id=import_request.group_id,
             proxy_id=import_request.proxy_id,
             proxy_url=proxy_url,
