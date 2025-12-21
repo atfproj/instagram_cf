@@ -38,17 +38,17 @@ class InstagramService:
         
         # Сначала пытаемся получить прокси через proxy_id (новый способ)
         proxy_url = None
-        logger.warning(f"[PROXY DEBUG] Проверка прокси для {self.account.username}: proxy_id={self.account.proxy_id}, proxy_url={self.account.proxy_url}")
+        logger.debug(f"Проверка прокси для {self.account.username}")
         if self.account.proxy_id:
             if self.account.proxy:
                 proxy_url = self.account.proxy.url
-                logger.warning(f"[PROXY DEBUG] Прокси найден через relationship: {proxy_url[:50]}...")
+                logger.debug(f"Прокси найден через relationship")
             else:
-                logger.warning(f"[PROXY DEBUG] proxy_id={self.account.proxy_id} указан, но self.account.proxy=None! Relationship не загружен!")
+                logger.debug(f"proxy_id указан, но relationship не загружен")
         # Если нет proxy_id, используем старый способ через proxy_url
         if not proxy_url and self.account.proxy_url:
             proxy_url = self.account.proxy_url
-            logger.warning(f"[PROXY DEBUG] Прокси найден через proxy_url: {proxy_url[:50]}...")
+            logger.debug(f"Прокси найден через proxy_url")
         
         if proxy_url:
             try:
@@ -59,13 +59,13 @@ class InstagramService:
                     # Если нет протокола, добавляем http://
                     proxy_url = f"http://{proxy_url}"
                 
-                logger.warning(f"[PROXY DEBUG] Устанавливаем прокси для {self.account.username}: {proxy_url[:60]}...")
+                logger.debug(f"Устанавливаем прокси для {self.account.username}")
                 
                 # ВАЖНО: Устанавливаем прокси ДО любых других операций
                 # instagrapi использует requests под капотом, нужно установить прокси правильно
                 # Упрощаем: используем только стандартный метод set_proxy (как работало раньше)
                 self.client.set_proxy(proxy_url)
-                logger.warning(f"[PROXY DEBUG] Прокси установлен через set_proxy() для {self.account.username}")
+                logger.debug(f"Прокси установлен для {self.account.username}")
                 
                 # Проверяем, что прокси действительно установлен
                 current_proxy = None
@@ -75,7 +75,7 @@ class InstagramService:
                         value = getattr(self.client, attr)
                         if value:
                             current_proxy = value
-                            logger.warning(f"[PROXY DEBUG] Прокси найден в client.{attr}: {str(value)[:60]}")
+                            logger.debug(f"Прокси найден в client.{attr}")
                             break
                 
                 if not current_proxy:
@@ -192,13 +192,13 @@ class InstagramService:
                 session = self.client.private.session
                 if hasattr(session, 'proxies') and not session.proxies:
                     # Если прокси не установлен в session, устанавливаем его
-                    logger.warning(f"[PROXY DEBUG] Прокси не найден в session.proxies перед login, устанавливаем...")
+                    logger.debug(f"Устанавливаем прокси в session.proxies")
                     if current_proxy:
                         if isinstance(current_proxy, str):
                             session.proxies = {'http': current_proxy, 'https': current_proxy}
                         else:
                             session.proxies = current_proxy
-                        logger.warning(f"[PROXY DEBUG] Прокси установлен в session.proxies: {session.proxies}")
+                        logger.debug(f"Прокси установлен в session.proxies")
             
             # Небольшая задержка перед авторизацией (помогает избежать проблем с Instagram)
             import time
@@ -275,9 +275,9 @@ class InstagramService:
             
             # Проверяем, есть ли информация о черном списке IP
             if "blacklist" in error_message.lower() or "change your ip" in error_message.lower():
-                logger.error(f"[PROXY DEBUG] Instagram сообщает, что IP в черном списке!")
-                logger.error(f"[PROXY DEBUG] Полное сообщение от Instagram: {error_message}")
-                logger.error(f"[PROXY DEBUG] Детали ошибки: {json.dumps(error_details, indent=2, default=str)}")
+                logger.error(f"Instagram сообщает, что IP в черном списке!")
+                logger.error(f"Полное сообщение от Instagram: {error_message}")
+                logger.error(f"Детали ошибки: {json.dumps(error_details, indent=2, default=str)}")
                 return {
                     "success": False,
                     "message": f"Instagram сообщает, что IP адрес прокси в черном списке: {error_message}",
@@ -360,11 +360,11 @@ class InstagramService:
             if "proxy" in error_str or "tunnel" in error_str or "403" in error_str or "connection" in error_str or "502" in error_str or "bad gateway" in error_str:
                 # Детальная диагностика для 502 Bad Gateway
                 if "502" in error_str or "bad gateway" in error_str:
-                    logger.error(f"[PROXY DEBUG] 502 Bad Gateway для {self.account.username}")
+                    logger.error(f"502 Bad Gateway для {self.account.username}")
                     proxy_url = self.account.proxy.url if self.account.proxy else self.account.proxy_url
-                    logger.error(f"[PROXY DEBUG] Прокси: {proxy_url[:60] if proxy_url else 'None'}...")
-                    logger.error(f"[PROXY DEBUG] Это означает, что прокси не может подключиться к Instagram")
-                    logger.error(f"[PROXY DEBUG] Возможные причины: Instagram блокирует этот прокси, прокси перегружен, или прокси неправильно настроен")
+                    logger.error(f"Прокси: {proxy_url[:60] if proxy_url else 'None'}...")
+                    logger.error(f"Это означает, что прокси не может подключиться к Instagram")
+                    logger.error(f"Возможные причины: Instagram блокирует этот прокси, прокси перегружен, или прокси неправильно настроен")
                 
                 return {
                     "success": False,
@@ -778,6 +778,7 @@ class InstagramService:
                 "is_private": bool (если успешно)
             }
         """
+        logger.warning(f"[DEBUG] set_profile_privacy вызван для аккаунта: {self.account.username}, is_private: {is_private}")
         start_time = datetime.utcnow()
         
         try:

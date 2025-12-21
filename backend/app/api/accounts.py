@@ -591,6 +591,7 @@ def toggle_profile_privacy(
         )
     
     # Создаём сервис Instagram
+    logger.warning(f"[DEBUG] toggle_profile_privacy вызван для аккаунта: {account.username}")
     instagram_service = InstagramService(account)
     
     # Изменяем приватность профиля
