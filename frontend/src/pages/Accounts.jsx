@@ -19,7 +19,7 @@ export default function Accounts() {
     accountsApi.getAll().then(r => r.data)
   )
   const { data: groups } = useQuery('groups', () => 
-    groupsApi.getAll().then(r => r.data)
+    groupsApi.getAll().then(r => Array.isArray(r.data) ? r.data : [])
   )
 
   const deleteMutation = useMutation(
@@ -122,7 +122,7 @@ export default function Accounts() {
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
               {accounts?.map((account) => {
-                const group = groups?.find(g => g.id === account.group_id)
+                const group = Array.isArray(groups) ? groups.find(g => g.id === account.group_id) : null
                 return (
                   <tr key={account.id} className="hover:bg-gray-50">
                     <td className="px-6 py-4 whitespace-nowrap">
