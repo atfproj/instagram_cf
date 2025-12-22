@@ -282,10 +282,36 @@ def validate_session(session_data: Dict[str, Any], proxy_url: Optional[str] = No
         }
         
     except Exception as e:
-        logger.error(f"❌ Ошибка валидации сессии: {type(e).__name__}: {str(e)}")
+        error_type = type(e).__name__
+        error_msg = str(e)
+        
+        # Детальное логирование для разных типов ошибок
+        if "LoginRequired" in error_type:
+            logger.error(f"❌ Instagram требует повторный логин: {error_msg}")
+            logger.error("   Возможные причины: сессия истекла, аккаунт заблокирован, неверные данные сессии")
+        elif "ChallengeRequired" in error_type:
+            logger.error(f"❌ Instagram требует прохождение challenge: {error_msg}")
+            logger.error("   Нужно пройти верификацию в официальном приложении Instagram")
+        elif "FeedbackRequired" in error_type:
+            logger.error(f"❌ Instagram ограничил аккаунт: {error_msg}")
+            logger.error("   Аккаунт временно заблокирован за подозрительную активность")
+        elif "ClientError" in error_type or "HTTPError" in error_type:
+            logger.error(f"❌ Ошибка соединения с Instagram: {error_msg}")
+            logger.error("   Проблемы с сетью или прокси")
+        else:
+            logger.error(f"❌ Неизвестная ошибка валидации сессии: {error_type}: {error_msg}")
+            
+        # Дополнительная отладочная информация
+        if hasattr(e, 'response'):
+            try:
+                response_text = e.response.text if hasattr(e.response, 'text') else str(e.response)
+                logger.error(f"   Ответ Instagram: {response_text[:500]}...")
+            except:
+                pass
+                
         return {
             'success': False,
-            'message': f'Ошибка валидации: {type(e).__name__}: {str(e)[:200]}',
+            'message': f'{error_type}: {error_msg[:200]}',
             'user_info': None
         }
 
