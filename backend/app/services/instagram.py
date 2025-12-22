@@ -116,9 +116,13 @@ class InstagramService:
         else:
             logger.info(f"Сессия отсутствует для {self.account.username}. Потребуется авторизация.")
     
-    def login(self, password: Optional[str] = None) -> Dict[str, Any]:
+    def login(self, password: Optional[str] = None, verification_code: Optional[str] = None) -> Dict[str, Any]:
         """
         Авторизация в Instagram
+        
+        Args:
+            password: Пароль аккаунта
+            verification_code: 2FA код (опционально)
         
         Returns:
             dict: {
@@ -204,8 +208,12 @@ class InstagramService:
             import time
             time.sleep(2)
             
-            # Попытка авторизации
-            self.client.login(self.account.username, password)
+            # Попытка авторизации (с 2FA кодом если есть)
+            if verification_code:
+                logger.info(f"Авторизация с 2FA кодом для {self.account.username}")
+                self.client.login(self.account.username, password, verification_code=verification_code)
+            else:
+                self.client.login(self.account.username, password)
             
             # Сохраняем сессию
             session_data = self.client.get_settings()
@@ -609,6 +617,52 @@ class InstagramService:
             logger.error(f"Ошибка при получении сессии: {e}")
             return {}
     
+    def submit_2fa_code(self, code: str) -> Dict[str, Any]:
+        """
+        Отправить 2FA код для завершения авторизации
+        
+        Args:
+            code: 2FA код (6 цифр) или backup код
+            
+        Returns:
+            dict: {
+                "success": bool,
+                "message": str,
+                "session_data": dict (если успешно)
+            }
+        """
+        start_time = datetime.utcnow()
+        
+        try:
+            logger.info(f"Отправка 2FA кода для {self.account.username}")
+            
+            # Отправляем 2FA код
+            self.client.two_factor_login(code)
+            
+            # Сохраняем сессию после успешной авторизации
+            session_data = self.client.get_settings()
+            
+            duration_ms = int((datetime.utcnow() - start_time).total_seconds() * 1000)
+            
+            return {
+                "success": True,
+                "message": "2FA авторизация успешна",
+                "session_data": session_data,
+                "duration_ms": duration_ms
+            }
+            
+        except Exception as e:
+            duration_ms = int((datetime.utcnow() - start_time).total_seconds() * 1000)
+            error_message = str(e)
+            
+            logger.error(f"Ошибка 2FA для {self.account.username}: {error_message}")
+            
+            return {
+                "success": False,
+                "message": f"Ошибка 2FA: {error_message}",
+                "duration_ms": duration_ms
+            }
+    
     def get_profile(self) -> Dict[str, Any]:
         """
         Получить информацию о профиле аккаунта
@@ -632,7 +686,11 @@ class InstagramService:
             duration_ms = int((datetime.utcnow() - start_time).total_seconds() * 1000)
             
             # Логируем тип объекта для отладки
-            logger.debug(f"account_info type: {type(account_info)}, dir: {dir(account_info)[:10] if hasattr(account_info, '__dict__') else 'N/A'}")
+            logger.warning(f"[DEBUG] account_info type: {type(account_info)}")
+            logger.warning(f"[DEBUG] account_info attributes: {dir(account_info) if hasattr(account_info, '__dict__') else 'N/A'}")
+            logger.warning(f"[DEBUG] follower_count: {getattr(account_info, 'follower_count', 'НЕТ АТРИБУТА')}")
+            logger.warning(f"[DEBUG] following_count: {getattr(account_info, 'following_count', 'НЕТ АТРИБУТА')}")
+            logger.warning(f"[DEBUG] media_count: {getattr(account_info, 'media_count', 'НЕТ АТРИБУТА')}")
             
             # Безопасное извлечение полей (обрабатываем и объекты, и словари)
             def safe_get(obj, attr, default=None):

@@ -7,12 +7,15 @@ import Modal from '../components/Modal'
 import AccountForm from '../components/AccountForm'
 import ProfileModal from '../components/ProfileModal'
 import ImportSessionModal from '../components/ImportSessionModal'
+import LoginModal from '../components/LoginModal'
 
 export default function Accounts() {
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [isImportModalOpen, setIsImportModalOpen] = useState(false)
+  const [isLoginModalOpen, setIsLoginModalOpen] = useState(false)
   const [editingAccount, setEditingAccount] = useState(null)
   const [profileAccount, setProfileAccount] = useState(null)
+  const [loginAccount, setLoginAccount] = useState(null)
   const queryClient = useQueryClient()
 
   const { data: accounts, isLoading } = useQuery('accounts', () => 
@@ -31,18 +34,10 @@ export default function Accounts() {
     }
   )
 
-  const loginMutation = useMutation(
-    (id) => accountsApi.login(id),
-    {
-      onSuccess: () => {
-        queryClient.invalidateQueries('accounts')
-        alert('Авторизация успешна!')
-      },
-      onError: (error) => {
-        alert(`Ошибка авторизации: ${error.message}`)
-      },
-    }
-  )
+  const handleLogin = (account) => {
+    setLoginAccount(account)
+    setIsLoginModalOpen(true)
+  }
 
   const statusMutation = useMutation(
     (id) => accountsApi.getStatus(id),
@@ -152,7 +147,7 @@ export default function Accounts() {
                           <User className="h-4 w-4" />
                         </button>
                         <button
-                          onClick={() => loginMutation.mutate(account.id)}
+                          onClick={() => handleLogin(account)}
                           className="text-primary-600 hover:text-primary-900"
                           title="Авторизация по логин/пароль"
                         >
@@ -213,6 +208,15 @@ export default function Accounts() {
         onSuccess={(response) => {
           alert(`Аккаунт '${response.account.username}' успешно импортирован!`)
           queryClient.invalidateQueries('accounts')
+        }}
+      />
+
+      <LoginModal
+        account={loginAccount}
+        isOpen={isLoginModalOpen}
+        onClose={() => {
+          setIsLoginModalOpen(false)
+          setLoginAccount(null)
         }}
       />
     </div>

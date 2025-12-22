@@ -6,7 +6,7 @@ export const accountsApi = {
   create: (data) => client.post('/api/accounts/', data),
   update: (id, data) => client.put(`/api/accounts/${id}`, data),
   delete: (id) => client.delete(`/api/accounts/${id}`),
-  login: (id) => client.post(`/api/accounts/${id}/login`),
+  login: (id, data = {}) => client.post(`/api/accounts/${id}/login`, data),
   getStatus: (id) => client.get(`/api/accounts/${id}/status`),
   getProfile: (id) => client.get(`/api/accounts/${id}/profile`),
   updateProfile: (id, data) => client.put(`/api/accounts/${id}/profile`, data),

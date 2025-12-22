@@ -18,6 +18,10 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/accounts", tags=["accounts"])
 
 
+class LoginRequest(BaseModel):
+    verification_code: Optional[str] = Field(None, description="2FA код (опционально)")
+
+
 # Функция для логирования
 def log_activity(db: Session, action: str, status: LogStatus, account_id: UUID = None, details: dict = None):
     """Логирование действий"""
@@ -265,7 +269,12 @@ def delete_account(account_id: UUID, db: Session = Depends(get_db), current_user
 
 
 @router.post("/{account_id}/login")
-def login_account(account_id: UUID, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+def login_account(
+    account_id: UUID, 
+    request: LoginRequest = LoginRequest(),
+    db: Session = Depends(get_db), 
+    current_user: User = Depends(get_current_user)
+):
     """Авторизоваться в Instagram"""
     from app.services.instagram import InstagramService
     from app.utils.logging import log_activity, update_account_status
@@ -292,8 +301,8 @@ def login_account(account_id: UUID, db: Session = Depends(get_db), current_user:
     # Создаём сервис Instagram
     instagram_service = InstagramService(db_account)
     
-    # Пытаемся авторизоваться
-    result = instagram_service.login()
+    # Пытаемся авторизоваться (с 2FA кодом если есть)
+    result = instagram_service.login(verification_code=request.verification_code)
     
         # Логируем результат авторизации для отладки
     import logging
@@ -353,6 +362,100 @@ def login_account(account_id: UUID, db: Session = Depends(get_db), current_user:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=result["message"]
+        )
+
+
+@router.post("/{account_id}/2fa")
+def submit_2fa_code(
+    account_id: UUID, 
+    request: dict,
+    db: Session = Depends(get_db), 
+    current_user: User = Depends(get_current_user)
+):
+    """Отправить 2FA код для завершения авторизации"""
+    from app.services.instagram import InstagramService
+    from app.utils.logging import log_activity, update_account_status
+    from app.models.activity_log import LogStatus
+    from sqlalchemy.orm import joinedload
+    
+    # Проверяем наличие кода
+    code = request.get("code")
+    if not code:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Не указан 2FA код"
+        )
+    
+    # Загружаем аккаунт с прокси
+    db_account = db.query(Account).options(joinedload(Account.proxy)).filter(Account.id == account_id).first()
+    if not db_account:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Аккаунт не найден"
+        )
+    
+    try:
+        # Создаем сервис Instagram
+        instagram_service = InstagramService(db_account)
+        
+        # Отправляем 2FA код
+        result = instagram_service.submit_2fa_code(code)
+        
+        if result["success"]:
+            # Сохраняем сессию в базу данных
+            db_account.session_data = result["session_data"]
+            db_account.status = AccountStatus.ACTIVE
+            db_account.last_login_at = datetime.utcnow()
+            
+            db.commit()
+            db.refresh(db_account)
+            
+            # Логируем успешную авторизацию
+            log_activity(
+                db=db,
+                action="2fa_login",
+                status=LogStatus.SUCCESS,
+                account_id=account_id,
+                details={"message": result["message"]},
+                duration_ms=result.get("duration_ms")
+            )
+            
+            return {
+                "success": True,
+                "message": result["message"],
+                "account": AccountResponse.from_orm(db_account)
+            }
+        else:
+            # Логируем ошибку
+            log_activity(
+                db=db,
+                action="2fa_login",
+                status=LogStatus.ERROR,
+                account_id=account_id,
+                details={"error": result["message"]},
+                duration_ms=result.get("duration_ms")
+            )
+            
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=result["message"]
+            )
+            
+    except Exception as e:
+        logger.error(f"Ошибка при отправке 2FA кода для аккаунта {account_id}: {str(e)}")
+        
+        # Логируем ошибку
+        log_activity(
+            db=db,
+            action="2fa_login",
+            status=LogStatus.ERROR,
+            account_id=account_id,
+            details={"error": str(e)}
+        )
+        
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Внутренняя ошибка сервера: {str(e)}"
         )
 
 
